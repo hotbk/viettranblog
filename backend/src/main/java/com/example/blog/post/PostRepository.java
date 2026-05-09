@@ -11,15 +11,17 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 
     boolean existsBySlug(String slug);
 
+    boolean existsBySlugAndIdNot(String slug, Long id);
+
     @Query("""
             select p from Post p
             where (:includeDrafts = true or p.status = 'PUBLISHED')
-              and (:category is null or lower(p.category) = lower(:category))
+              and (cast(:category as String) is null or lower(p.category) = lower(cast(:category as String)))
               and (
-                :q is null
-                or lower(p.title) like lower(concat('%', :q, '%'))
-                or lower(p.excerpt) like lower(concat('%', :q, '%'))
-                or lower(p.content) like lower(concat('%', :q, '%'))
+                cast(:q as String) is null
+                or lower(p.title) like lower(concat('%', cast(:q as String), '%'))
+                or lower(p.excerpt) like lower(concat('%', cast(:q as String), '%'))
+                or lower(p.content) like lower(concat('%', cast(:q as String), '%'))
               )
             order by p.publishedAt desc nulls last, p.createdAt desc
             """)

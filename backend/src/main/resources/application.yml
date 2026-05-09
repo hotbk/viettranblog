@@ -1,6 +1,13 @@
 spring:
   application:
     name: personal-blog-backend
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/personal_blog}
     username: ${SPRING_DATASOURCE_USERNAME:blog_user}
@@ -14,13 +21,9 @@ spring:
         format_sql: true
 
 server:
-  port: 8080
+  port: 18080
 
 blog:
-  admin:
-    # WARNING: Override BLOG_ADMIN_USERNAME and BLOG_ADMIN_PASSWORD in production
-    username: ${BLOG_ADMIN_USERNAME:admin}
-    password: ${BLOG_ADMIN_PASSWORD:admin123}
   jwt:
     # WARNING: Override JWT_SECRET with a strong secret (32+ chars) in production
     secret: ${JWT_SECRET:dev-secret-do-not-use-in-production-32chars}

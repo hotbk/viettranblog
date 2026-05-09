@@ -1,7 +1,9 @@
 package com.example.blog.auth;
 
+import com.example.blog.user.User;
+import com.example.blog.user.UserRepository;
+import com.example.blog.user.UserRole;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,37 +18,36 @@ public class AuthController {
 
     private final JwtService jwtService;
     private final PasswordEncoder passwordEncoder;
-    private final String adminUsername;
-    private final String adminPasswordHash;
+    private final UserRepository userRepository;
 
-    public AuthController(
-            JwtService jwtService,
-            PasswordEncoder passwordEncoder,
-            @Value("${blog.admin.username}") String adminUsername,
-            @Value("${blog.admin.password}") String adminPassword) {
+    public AuthController(JwtService jwtService, PasswordEncoder passwordEncoder,
+                          UserRepository userRepository) {
         this.jwtService = jwtService;
         this.passwordEncoder = passwordEncoder;
-        this.adminUsername = adminUsername;
-        // Hash the configured password at startup
-        this.adminPasswordHash = passwordEncoder.encode(adminPassword);
+        this.userRepository = userRepository;
     }
 
     @PostMapping("/login")
     public LoginResponse login(@Valid @RequestBody LoginRequest request) {
-        boolean usernameMatch = adminUsername.equals(request.username());
-        boolean passwordMatch = usernameMatch && passwordEncoder.matches(request.password(), adminPasswordHash);
+        User user = userRepository.findByUsername(request.username())
+                .orElse(null);
 
-        // Always run passwordEncoder.matches to prevent timing attacks
-        if (!usernameMatch) {
-            // Still call matches to consume similar time
-            passwordEncoder.matches(request.password(), adminPasswordHash);
-        }
+        boolean credentialsValid = user != null
+                && passwordEncoder.matches(request.password(), user.getPassword());
 
-        if (!usernameMatch || !passwordMatch) {
+        if (!credentialsValid) {
+            // Always encode to prevent timing attacks
+            passwordEncoder.matches(request.password(),
+                    "$2a$10$dummyhashtopreventtimingattacksxx");
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
 
-        String token = jwtService.generateToken(adminUsername);
-        return new LoginResponse(token, adminUsername, "ADMIN");
+        if (user.getRole() != UserRole.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Access denied: admin role required");
+        }
+
+        String token = jwtService.generateToken(user.getUsername(), user.getRole().name());
+        return new LoginResponse(token, user.getUsername(), user.getRole().name());
     }
 }

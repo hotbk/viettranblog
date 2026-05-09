@@ -1,6 +1,26 @@
+import { authHeader } from './auth';
 import type { BlogPost } from './types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
+
+export class UnauthorizedError extends Error {
+  constructor(message = 'Session expired') {
+    super(message);
+    this.name = 'UnauthorizedError';
+  }
+}
+
+export interface PostRequest {
+  title: string;
+  slug: string;
+  excerpt: string;
+  content: string;
+  category: string;
+  tags: string[];
+  status: 'DRAFT' | 'PUBLISHED';
+}
+
+export type PostResponse = BlogPost;
 
 interface PostQuery {
   q?: string;
@@ -30,4 +50,97 @@ export async function fetchPostBySlug(slug: string): Promise<BlogPost> {
   }
 
   return response.json();
+}
+
+export async function fetchAdminPosts(): Promise<BlogPost[]> {
+  const response = await fetch(`${API_BASE_URL}/admin/posts`, {
+    headers: authHeader(),
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    throw new UnauthorizedError();
+  }
+
+  if (!response.ok) {
+    throw new Error('Unable to load posts');
+  }
+
+  return response.json();
+}
+
+export async function createPost(data: PostRequest, coverImage?: File): Promise<PostResponse> {
+  const fd = new FormData();
+  fd.append('title', data.title);
+  fd.append('slug', data.slug);
+  fd.append('excerpt', data.excerpt);
+  fd.append('content', data.content);
+  fd.append('category', data.category);
+  fd.append('tags', data.tags.join(','));
+  fd.append('status', data.status);
+  if (coverImage) fd.append('coverImage', coverImage);
+
+  const response = await fetch(`${API_BASE_URL}/posts`, {
+    method: 'POST',
+    headers: { ...authHeader() },
+    body: fd,
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    throw new UnauthorizedError();
+  }
+
+  if (!response.ok) {
+    throw new Error('Failed to create post');
+  }
+
+  return response.json();
+}
+
+export async function updatePost(
+  id: number,
+  data: PostRequest,
+  coverImage?: File,
+  removeCoverImage?: boolean,
+): Promise<PostResponse> {
+  const fd = new FormData();
+  fd.append('title', data.title);
+  fd.append('slug', data.slug);
+  fd.append('excerpt', data.excerpt);
+  fd.append('content', data.content);
+  fd.append('category', data.category);
+  fd.append('tags', data.tags.join(','));
+  fd.append('status', data.status);
+  fd.append('removeCoverImage', removeCoverImage ? 'true' : 'false');
+  if (coverImage) fd.append('coverImage', coverImage);
+
+  const response = await fetch(`${API_BASE_URL}/posts/${id}`, {
+    method: 'PUT',
+    headers: { ...authHeader() },
+    body: fd,
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    throw new UnauthorizedError();
+  }
+
+  if (!response.ok) {
+    throw new Error('Failed to update post');
+  }
+
+  return response.json();
+}
+
+export async function deletePost(id: number): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/posts/${id}`, {
+    method: 'DELETE',
+    headers: { ...authHeader() },
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    throw new UnauthorizedError();
+  }
+
+  if (!response.ok) {
+    throw new Error('Failed to delete post');
+  }
 }

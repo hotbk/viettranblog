@@ -17,6 +17,9 @@ frontend/.vite/
 backend/target/
 *.log
 
+# Database data (bind mount)
+data/
+
 # IDE
 .idea/
 .vscode/

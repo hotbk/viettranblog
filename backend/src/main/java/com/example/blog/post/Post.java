@@ -7,6 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -48,6 +49,19 @@ public class Post {
 
     private Instant publishedAt;
 
+    @Lob
+    @Column(name = "cover_image_data", columnDefinition = "bytea")
+    private byte[] coverImageData;
+
+    @Column(name = "cover_image_content_type", length = 100)
+    private String coverImageContentType;
+
+    @Column(name = "cover_image_original_filename", length = 255)
+    private String coverImageOriginalFilename;
+
+    @Column(name = "cover_image_size")
+    private Long coverImageSize;
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();
@@ -88,4 +102,12 @@ public class Post {
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
     public Instant getPublishedAt() { return publishedAt; }
     public void setPublishedAt(Instant publishedAt) { this.publishedAt = publishedAt; }
+    public byte[] getCoverImageData() { return coverImageData; }
+    public void setCoverImageData(byte[] coverImageData) { this.coverImageData = coverImageData; }
+    public String getCoverImageContentType() { return coverImageContentType; }
+    public void setCoverImageContentType(String coverImageContentType) { this.coverImageContentType = coverImageContentType; }
+    public String getCoverImageOriginalFilename() { return coverImageOriginalFilename; }
+    public void setCoverImageOriginalFilename(String coverImageOriginalFilename) { this.coverImageOriginalFilename = coverImageOriginalFilename; }
+    public Long getCoverImageSize() { return coverImageSize; }
+    public void setCoverImageSize(Long coverImageSize) { this.coverImageSize = coverImageSize; }
 }

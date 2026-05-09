@@ -12,4 +12,9 @@ export interface BlogPost {
   createdAt: string;
   updatedAt: string;
   publishedAt: string | null;
+  hasCoverImage: boolean;
+  coverImageUrl: string | null;
+  coverImageOriginalFilename: string | null;
+  coverImageContentType: string | null;
+  coverImageSize: number | null;
 }
