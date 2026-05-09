@@ -15,3 +15,13 @@ spring:
 
 server:
   port: 8080
+
+blog:
+  admin:
+    # WARNING: Override BLOG_ADMIN_USERNAME and BLOG_ADMIN_PASSWORD in production
+    username: ${BLOG_ADMIN_USERNAME:admin}
+    password: ${BLOG_ADMIN_PASSWORD:admin123}
+  jwt:
+    # WARNING: Override JWT_SECRET with a strong secret (32+ chars) in production
+    secret: ${JWT_SECRET:dev-secret-do-not-use-in-production-32chars}
+    expiration-ms: 86400000  # 24 hours

@@ -6,3 +6,11 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+
+blog:
+  admin:
+    username: admin
+    password: admin123
+  jwt:
+    secret: test-secret-do-not-use-in-production-32chars
+    expiration-ms: 86400000
