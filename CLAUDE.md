@@ -22,6 +22,31 @@ AI workflow:
 - Project instructions in this file
 - Task breakdown in `TASKS.md`
 - Documents in `docs/`
+- Long-term project memory in `docs/06-project-memory.md`
+
+## Token Saving Rules
+
+- Read only the files needed for the current task. Do not scan the whole repository unless the task requires cross-project context.
+- Start with the files explicitly named by the user, then inspect only direct imports, tests, or documentation that are necessary.
+- Keep responses short and practical: summarize the cause, changed files, and verification steps.
+- Do not paste long file contents, logs, or generated code in the response unless the user asks for them.
+- For large tasks, split work into small steps and confirm the next target instead of loading many unrelated files at once.
+- Prefer concise diffs and focused edits over broad rewrites.
+- When a task only affects frontend, backend, docs, or DevOps, stay inside that area unless an integration point must be checked.
+
+## Long-Term Memory Rules
+
+- Before starting a task, read `docs/06-project-memory.md` to understand what has already been completed, decided, or intentionally deferred.
+- After completing a meaningful change, update `docs/06-project-memory.md` with:
+  - date
+  - summary of what changed
+  - files or areas touched
+  - tests or checks run
+  - decisions made
+  - follow-up tasks or known gaps
+- Do not repeat work already marked as completed in project memory unless the user explicitly asks to revisit it.
+- If project memory conflicts with current code, trust the current code and update the memory with the corrected state.
+- Keep memory entries concise. Record durable facts and decisions, not full logs or long explanations.
 
 ## Product Scope
 
