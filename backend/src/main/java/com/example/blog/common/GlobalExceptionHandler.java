@@ -28,7 +28,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException exception) {
-        return ResponseEntity.badRequest().body(new ApiError("BAD_REQUEST", exception.getMessage()));
+        String msg = exception.getMessage();
+        if ("USERNAME_TAKEN".equals(msg) || "EMAIL_TAKEN".equals(msg)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(msg, msg.equals("USERNAME_TAKEN")
+                    ? "Username is already taken"
+                    : "Email is already in use"));
+        }
+        return ResponseEntity.badRequest().body(new ApiError("BAD_REQUEST", msg));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)

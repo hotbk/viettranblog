@@ -42,9 +42,9 @@ public class AuthController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
 
-        if (user.getRole() != UserRole.ADMIN) {
+        if (user.getRole() == UserRole.READER) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Access denied: admin role required");
+                    "Access denied: admin or editor role required");
         }
 
         String token = jwtService.generateToken(user.getUsername(), user.getRole().name());

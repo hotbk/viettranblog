@@ -7,7 +7,6 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -49,7 +48,6 @@ public class Post {
 
     private Instant publishedAt;
 
-    @Lob
     @Column(name = "cover_image_data", columnDefinition = "bytea")
     private byte[] coverImageData;
 

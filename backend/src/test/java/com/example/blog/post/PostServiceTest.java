@@ -26,7 +26,7 @@ class PostServiceTest {
                 "Test",
                 List.of("published"),
                 PostStatus.PUBLISHED
-        ));
+        ), null);
 
         postService.create(new PostRequest(
                 "Draft Test",
@@ -36,7 +36,7 @@ class PostServiceTest {
                 "Test",
                 List.of("draft"),
                 PostStatus.DRAFT
-        ));
+        ), null);
 
         List<PostResponse> result = postService.search("Test", null, false);
 

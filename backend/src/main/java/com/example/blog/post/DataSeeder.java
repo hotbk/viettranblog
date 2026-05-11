@@ -70,7 +70,7 @@ public class DataSeeder {
                 "Technology",
                 List.of("react", "spring-boot", "fullstack"),
                 PostStatus.PUBLISHED
-        ));
+        ), null);
 
         postService.create(new PostRequest(
                 "Why AI Agents Need Clear Boundaries",
@@ -80,7 +80,7 @@ public class DataSeeder {
                 "AI Workflow",
                 List.of("claude-code", "agents", "workflow"),
                 PostStatus.PUBLISHED
-        ));
+        ), null);
 
         postService.create(new PostRequest(
                 "Getting Started with PostgreSQL and Spring Data JPA",
@@ -90,7 +90,7 @@ public class DataSeeder {
                 "Technology",
                 List.of("postgresql", "spring-boot", "jpa"),
                 PostStatus.PUBLISHED
-        ));
+        ), null);
 
         postService.create(new PostRequest(
                 "Ghi chú về quản lý dự án cá nhân",
@@ -100,7 +100,7 @@ public class DataSeeder {
                 "Personal",
                 List.of("productivity", "side-project", "management"),
                 PostStatus.DRAFT
-        ));
+        ), null);
 
         return postRepository.findAll();
     }

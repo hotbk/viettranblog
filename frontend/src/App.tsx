@@ -81,9 +81,29 @@ export default function App() {
 
       {/* ── Hero ───────────────────────────────── */}
       <section className="hero">
-        <p className="hero__eyebrow">Personal Blog</p>
-        <h1 className="hero__title">viettran Blog</h1>
-        <p className="hero__tagline">Thoughts on technology &amp; life — software, data, and things worth sharing.</p>
+        <div className="hero__inner">
+          <p className="hero__eyebrow">✦ Personal Blog</p>
+          <h1 className="hero__title">viettran Blog</h1>
+          <p className="hero__tagline">Thoughts on technology &amp; life — software, data, and things worth sharing.</p>
+        </div>
+        {!loading && posts.length > 0 && (
+          <div className="hero__stats">
+            <div className="hero__stat">
+              <span className="hero__stat-value">{posts.length}</span>
+              <span className="hero__stat-label">Posts</span>
+            </div>
+            <div className="hero__stat">
+              <span className="hero__stat-value">{categories.length}</span>
+              <span className="hero__stat-label">Topics</span>
+            </div>
+            <div className="hero__stat">
+              <span className="hero__stat-value">
+                {Array.from(new Set(posts.flatMap((p) => p.tags))).length}
+              </span>
+              <span className="hero__stat-label">Tags</span>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ── Post List ──────────────────────────── */}

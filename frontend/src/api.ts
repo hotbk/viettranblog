@@ -1,5 +1,5 @@
 import { authHeader } from './auth';
-import type { BlogPost } from './types';
+import type { BlogPost, Comment } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
@@ -143,4 +143,107 @@ export async function deletePost(id: number): Promise<void> {
   if (!response.ok) {
     throw new Error('Failed to delete post');
   }
+}
+
+// ── Comments ─────────────────────────────────────────────────────────────────
+
+export interface CommentRequest {
+  authorName: string;
+  authorEmail?: string;
+  content: string;
+}
+
+export async function fetchComments(slug: string): Promise<Comment[]> {
+  const response = await fetch(`${API_BASE_URL}/posts/${slug}/comments`);
+  if (!response.ok) throw new Error('Failed to load comments');
+  return response.json();
+}
+
+export async function submitComment(slug: string, data: CommentRequest): Promise<Comment> {
+  const response = await fetch(`${API_BASE_URL}/posts/${slug}/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.message ?? 'Failed to submit comment');
+  }
+  return response.json();
+}
+
+export async function deleteComment(id: number): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/admin/comments/${id}`, {
+    method: 'DELETE',
+    headers: authHeader(),
+  });
+  if (response.status === 401 || response.status === 403) throw new UnauthorizedError();
+  if (!response.ok) throw new Error('Failed to delete comment');
+}
+
+// ── User management ──────────────────────────────────────────────────────────
+
+export interface UserResponse {
+  id: number;
+  username: string;
+  email: string;
+  role: 'ADMIN' | 'EDITOR' | 'READER';
+  createdAt: string;
+}
+
+export interface CreateUserRequest {
+  username: string;
+  email: string;
+  password: string;
+  role: 'ADMIN' | 'EDITOR' | 'READER';
+}
+
+export async function fetchAdminUsers(): Promise<UserResponse[]> {
+  const response = await fetch(`${API_BASE_URL}/admin/users`, {
+    headers: authHeader(),
+  });
+
+  if (response.status === 401 || response.status === 403) throw new UnauthorizedError();
+  if (!response.ok) throw new Error('Failed to load users');
+
+  return response.json();
+}
+
+export async function createUser(data: CreateUserRequest): Promise<UserResponse> {
+  const response = await fetch(`${API_BASE_URL}/admin/users`, {
+    method: 'POST',
+    headers: { ...authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (response.status === 401 || response.status === 403) throw new UnauthorizedError();
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.message ?? 'Failed to create user');
+  }
+
+  return response.json();
+}
+
+export async function updateUserRole(id: number, role: string): Promise<UserResponse> {
+  const response = await fetch(`${API_BASE_URL}/admin/users/${id}/role?role=${role}`, {
+    method: 'PUT',
+    headers: authHeader(),
+  });
+
+  if (response.status === 401 || response.status === 403) throw new UnauthorizedError();
+  if (!response.ok) throw new Error('Failed to update role');
+
+  return response.json();
+}
+
+export async function deleteUser(id: number): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/admin/users/${id}`, {
+    method: 'DELETE',
+    headers: authHeader(),
+  });
+
+  if (response.status === 401 || response.status === 403) throw new UnauthorizedError();
+  if (!response.ok) throw new Error('Failed to delete user');
 }

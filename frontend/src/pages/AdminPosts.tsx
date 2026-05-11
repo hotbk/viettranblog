@@ -130,6 +130,7 @@ export default function AdminPosts() {
             <span className="admin-topbar__brand-sub">Admin Panel</span>
           </div>
           <div className="admin-topbar__actions">
+            <Link to="/admin/users" className="admin-topbar__view-site">Users</Link>
             <Link to="/" className="admin-topbar__view-site">View site &rarr;</Link>
             <button className="btn--topbar-logout" onClick={handleLogout}>
               Sign out

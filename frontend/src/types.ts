@@ -1,5 +1,14 @@
 export type PostStatus = 'DRAFT' | 'PUBLISHED';
 
+export interface Comment {
+  id: number;
+  postId: number;
+  authorName: string;
+  authorEmail: string | null;
+  content: string;
+  createdAt: string;
+}
+
 export interface BlogPost {
   id: number;
   title: string;
