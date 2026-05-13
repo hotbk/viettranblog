@@ -10,7 +10,7 @@ import {
 import type { UserResponse, CreateUserRequest } from '../api';
 import { logout } from '../auth';
 
-type Role = 'ADMIN' | 'EDITOR' | 'READER';
+type Role = 'ADMIN' | 'EDITOR' | 'READER' | 'MEMBER';
 
 function formatDate(iso: string) {
   return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(iso));
@@ -24,12 +24,13 @@ interface Toast {
 
 let toastId = 0;
 
-const ROLE_LABELS: Record<Role, string> = { ADMIN: 'Admin', EDITOR: 'Editor', READER: 'Reader' };
+const ROLE_LABELS: Record<Role, string> = { ADMIN: 'Admin', EDITOR: 'Editor', READER: 'Reader', MEMBER: 'Member' };
 
 const ROLE_BADGE: Record<Role, string> = {
   ADMIN: 'badge--admin',
   EDITOR: 'badge--editor',
   READER: 'badge--reader',
+  MEMBER: 'badge--draft',
 };
 
 const EMPTY_FORM: CreateUserRequest = { username: '', email: '', password: '', role: 'READER' };
@@ -153,6 +154,9 @@ export default function AdminUsers() {
           </div>
           <div className="admin-topbar__actions">
             <Link to="/admin/posts" className="admin-topbar__view-site">Posts</Link>
+            <Link to="/admin/exams" className="admin-topbar__view-site">Exams</Link>
+            <Link to="/admin/attempts" className="admin-topbar__view-site">Attempts</Link>
+            <Link to="/admin/series" className="admin-topbar__view-site">Series</Link>
             <Link to="/" className="admin-topbar__view-site">View site &rarr;</Link>
             <button className="btn--topbar-logout" onClick={handleLogout}>Sign out</button>
           </div>

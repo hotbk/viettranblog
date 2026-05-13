@@ -80,6 +80,12 @@ public class PostController {
                 .body(post.getCoverImageData());
     }
 
+    @PostMapping("/{slug}/view")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void recordView(@PathVariable String slug) {
+        postService.recordView(slug);
+    }
+
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long id) {

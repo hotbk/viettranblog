@@ -1,6 +1,8 @@
 package com.example.blog.post;
 
 import com.example.blog.common.NotFoundException;
+import com.example.blog.series.SeriesPost;
+import com.example.blog.series.SeriesPostRepository;
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
@@ -17,9 +19,11 @@ public class PostService {
     );
 
     private final PostRepository postRepository;
+    private final SeriesPostRepository seriesPostRepository;
 
-    public PostService(PostRepository postRepository) {
+    public PostService(PostRepository postRepository, SeriesPostRepository seriesPostRepository) {
         this.postRepository = postRepository;
+        this.seriesPostRepository = seriesPostRepository;
     }
 
     @Transactional(readOnly = true)
@@ -33,10 +37,10 @@ public class PostService {
 
     @Transactional(readOnly = true)
     public PostResponse findBySlug(String slug) {
-        return postRepository.findBySlug(slug)
-                .filter(post -> post.getStatus() == PostStatus.PUBLISHED)
-                .map(PostResponse::from)
+        Post post = postRepository.findBySlug(slug)
+                .filter(p -> p.getStatus() == PostStatus.PUBLISHED)
                 .orElseThrow(() -> new NotFoundException("POST_NOT_FOUND", "Post not found"));
+        return PostResponse.from(post, buildSeriesInfo(post.getId()));
     }
 
     @Transactional
@@ -67,6 +71,11 @@ public class PostService {
             applyImage(post, coverImage);
         }
         return PostResponse.from(postRepository.save(post));
+    }
+
+    @Transactional
+    public void recordView(String slug) {
+        postRepository.incrementViewCount(slug);
     }
 
     @Transactional
@@ -141,5 +150,30 @@ public class PostService {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private PostResponse.SeriesInfo buildSeriesInfo(Long postId) {
+        return seriesPostRepository.findByPostId(postId)
+                .map(sp -> {
+                    List<SeriesPost> all = seriesPostRepository
+                            .findBySeriesIdOrderByPositionAsc(sp.getSeries().getId());
+                    int pos = sp.getPosition();
+                    int total = all.size();
+                    String prev = all.stream()
+                            .filter(p -> p.getPosition() == pos - 1)
+                            .findFirst()
+                            .map(p -> p.getPost().getSlug())
+                            .orElse(null);
+                    String next = all.stream()
+                            .filter(p -> p.getPosition() == pos + 1)
+                            .findFirst()
+                            .map(p -> p.getPost().getSlug())
+                            .orElse(null);
+                    return new PostResponse.SeriesInfo(
+                            sp.getSeries().getSlug(),
+                            sp.getSeries().getTitle(),
+                            pos, total, prev, next);
+                })
+                .orElse(null);
     }
 }

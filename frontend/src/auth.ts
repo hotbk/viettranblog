@@ -8,8 +8,11 @@ export async function login(username: string, password: string): Promise<void> {
     body: JSON.stringify({ username, password }),
   });
 
+  if (response.status === 403) {
+    throw new Error('Tài khoản này không có quyền đăng nhập admin (role: READER)');
+  }
   if (!response.ok) {
-    throw new Error('Invalid username or password');
+    throw new Error('Sai tên đăng nhập hoặc mật khẩu');
   }
 
   const data = await response.json();

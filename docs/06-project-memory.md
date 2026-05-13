@@ -79,6 +79,30 @@ Decisions:
 - Object URLs are revoked via `useEffect` cleanup and on explicit replace/remove to prevent memory leaks
 - Card cover image breaks out of card padding using negative margins so it sits flush at the top
 
+### 2026-05-12 — Post view count feature
+
+Added atomic view count tracking for published posts.
+
+Files changed:
+- `backend/src/main/java/com/example/blog/post/Post.java` — added `viewCount` field (`bigint default 0`) with getter/setter
+- `backend/src/main/java/com/example/blog/post/PostResponse.java` — added `long viewCount` record component; both `from()` overloads pass `post.getViewCount()`
+- `backend/src/main/java/com/example/blog/post/PostRepository.java` — added `@Modifying @Query incrementViewCount(slug)` (atomic UPDATE, only PUBLISHED posts); added `Modifying` import
+- `backend/src/main/java/com/example/blog/post/PostService.java` — added `@Transactional recordView(String slug)`
+- `backend/src/main/java/com/example/blog/post/PostController.java` — added `POST /api/posts/{slug}/view` → 204 No Content
+- `backend/src/main/java/com/example/blog/config/SecurityConfig.java` — added `POST /api/posts/*/view` to `permitAll()` before comments rule
+
+New public endpoint:
+- `POST /api/posts/{slug}/view` — increments view count atomically; silently ignored for drafts/non-existent slugs; returns 204
+
+Schema change:
+- New column `view_count bigint default 0 not null` on `posts` table; added automatically by `ddl-auto: update`
+
+Tests run: `mvn test` — 20 tests, 0 failures, 0 errors.
+
+Decisions:
+- Atomic `UPDATE` via JPQL `@Modifying` avoids read-modify-write race conditions under concurrent traffic.
+- Endpoint returns 204 even when slug does not match (0 rows updated) — no error exposed to prevent slug enumeration.
+
 ## Known Gaps / Follow-ups
 
 - No implementation status has been recorded yet beyond documentation setup.
@@ -221,3 +245,45 @@ Decisions:
 
 Known gap:
 - Frontend Vite dev server must be at http://localhost:5173 (allowed in CORS config). Start with `cd frontend && npm run dev`.
+
+### 2026-05-12 — Series CRUD
+
+Added full series create/edit/delete functionality for admin and public-facing pages.
+
+Backend files added (`backend/.../series/`):
+- `Series.java` — entity, table: `series`
+- `SeriesPost.java` — join entity, table: `series_posts`
+- `SeriesRepository.java`, `SeriesPostRepository.java`
+- `SeriesService.java` — create, update, delete, list, setPostOrder
+- `AdminSeriesController.java` — `GET/POST/PUT/DELETE /api/admin/series/**` (ADMIN required)
+- `SeriesController.java` — `GET /api/series`, `GET /api/series/{slug}` (public)
+- DTOs: `SeriesRequest`, `SeriesSummaryResponse`, `SeriesDetailResponse`, `SeriesPostItem`, `SeriesPostsRequest`
+
+Frontend files added/modified:
+- `AdminSeries.tsx` — admin list with delete
+- `AdminSeriesForm.tsx` — create/edit form with post ordering (add/remove/reorder)
+- `SeriesList.tsx` — public series listing
+- `SeriesDetail.tsx` — public series detail with ordered post list
+- `api.ts` — added series API functions (fetchSeries, fetchSeriesBySlug, fetchAdminSeriesList, fetchAdminSeries, createSeries, updateSeries, deleteSeries, setSeriesPosts)
+- `types.ts` — added SeriesSummary, SeriesDetail, SeriesPostItem, SeriesInfo
+- `main.tsx` — added routes: `/series`, `/series/:slug`, `/admin/series`, `/admin/series/new`, `/admin/series/:id/edit`
+- `App.tsx`, `AdminPosts.tsx` — added nav links to series pages
+
+Lint fixes: replaced synchronous `setState` calls in `useEffect` body with a `loadedSlug`-derived loading flag in `SeriesDetail.tsx` and `PostDetail.tsx (CommentSection)`; removed redundant `setLoading(true)` from `AdminSeries.tsx`.
+
+Checks run: `npm run lint` (0 errors, 1 pre-existing warning in AdminUsers.tsx), `npm run typecheck` (clean), `npm run build` (success).
+
+Decisions:
+- `POST/PUT/DELETE /api/admin/series/**` falls to `anyRequest().authenticated()` in SecurityConfig. Acceptable at MVP since only ADMIN users can obtain JWT tokens (auth endpoint rejects non-ADMIN login).
+
+Public endpoints:
+- `GET /api/series` — list published series
+- `GET /api/series/{slug}` — series detail with ordered posts
+
+Admin endpoints (ADMIN role required):
+- `GET /api/admin/series` — list all series including drafts
+- `GET /api/admin/series/{id}` — get by ID
+- `POST /api/admin/series` — create
+- `PUT /api/admin/series/{id}` — update metadata
+- `DELETE /api/admin/series/{id}` — delete (removes series_posts rows first)
+- `PUT /api/admin/series/{id}/posts` — set post order

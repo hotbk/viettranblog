@@ -12,10 +12,15 @@
   },
   "dependencies": {
     "@types/react-router-dom": "^5.3.3",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "@uiw/react-md-editor": "^4.1.0",
     "@vitejs/plugin-react": "latest",
     "react": "latest",
     "react-dom": "latest",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^7.15.0",
+    "react-syntax-highlighter": "^16.1.1",
+    "rehype-raw": "^7.0.0",
     "typescript": "latest",
     "vite": "latest"
   },
@@ -23,6 +28,7 @@
     "@eslint/js": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "eslint": "latest",
     "eslint-plugin-react-hooks": "latest",
     "eslint-plugin-react-refresh": "latest",

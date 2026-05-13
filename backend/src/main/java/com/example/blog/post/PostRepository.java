@@ -3,6 +3,7 @@ package com.example.blog.post;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -28,4 +29,8 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     List<Post> search(@Param("q") String q,
                       @Param("category") String category,
                       @Param("includeDrafts") boolean includeDrafts);
+
+    @Modifying
+    @Query("UPDATE Post p SET p.viewCount = p.viewCount + 1 WHERE p.slug = :slug AND p.status = 'PUBLISHED'")
+    int incrementViewCount(@Param("slug") String slug);
 }

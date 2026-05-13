@@ -19,9 +19,24 @@ public record PostResponse(
         String coverImageUrl,
         String coverImageOriginalFilename,
         String coverImageContentType,
-        Long coverImageSize
+        Long coverImageSize,
+        SeriesInfo seriesInfo,
+        long viewCount
 ) {
+    public record SeriesInfo(
+            String seriesSlug,
+            String seriesTitle,
+            int position,
+            int totalPosts,
+            String prevPostSlug,
+            String nextPostSlug
+    ) {}
+
     static PostResponse from(Post post) {
+        return from(post, null);
+    }
+
+    static PostResponse from(Post post, SeriesInfo seriesInfo) {
         boolean hasImage = post.getCoverImageData() != null && post.getCoverImageData().length > 0;
         return new PostResponse(
                 post.getId(),
@@ -39,7 +54,9 @@ public record PostResponse(
                 hasImage ? "/api/posts/" + post.getId() + "/cover-image" : null,
                 post.getCoverImageOriginalFilename(),
                 post.getCoverImageContentType(),
-                post.getCoverImageSize()
+                post.getCoverImageSize(),
+                seriesInfo,
+                post.getViewCount()
         );
     }
 }

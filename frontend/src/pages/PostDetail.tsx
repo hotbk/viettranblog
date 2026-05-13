@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { fetchPostBySlug, fetchComments, submitComment } from '../api';
+import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { fetchPostBySlug, recordPostView, fetchComments, submitComment } from '../api';
 import type { CommentRequest } from '../api';
 import type { BlogPost, Comment } from '../types';
+import NavBrand from '../components/NavBrand';
 
 function formatDate(value: string | null): string {
   if (!value) return 'Unpublished';
@@ -47,7 +52,10 @@ export default function PostDetail() {
       setError(null);
       try {
         const data = await fetchPostBySlug(slug!);
-        if (!cancelled) setPost(data);
+        if (!cancelled) {
+          setPost(data);
+          recordPostView(slug!);
+        }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Post not found');
       } finally {
@@ -66,10 +74,7 @@ export default function PostDetail() {
       {/* ── Navbar ─────────────────────────────── */}
       <nav className="site-nav">
         <div className="site-nav__inner">
-          <Link to="/" className="site-nav__brand">
-            <div className="site-nav__logo">VT</div>
-            <span className="site-nav__name">viettran Blog</span>
-          </Link>
+          <NavBrand />
           <div className="site-nav__links">
             <Link to="/" className="site-nav__link">Home</Link>
           </div>
@@ -111,9 +116,37 @@ export default function PostDetail() {
                 )}
                 <span className="post-detail__date">{formatDate(post.publishedAt)}</span>
                 <span className="post-detail__reading-time">{readingTime(post.content)}</span>
+                <span className="post-detail__views">{(post.viewCount ?? 0).toLocaleString()} views</span>
               </div>
 
               <h1 className="post-detail__title">{post.title}</h1>
+
+              {post.seriesInfo && (
+                <div className="series-nav">
+                  <span className="series-nav__label">
+                    Post {post.seriesInfo.position}/{post.seriesInfo.totalPosts} in series:{' '}
+                    <Link to={`/series/${post.seriesInfo.seriesSlug}`} className="series-nav__series-link">
+                      {post.seriesInfo.seriesTitle}
+                    </Link>
+                  </span>
+                  <div className="series-nav__btns">
+                    {post.seriesInfo.prevPostSlug ? (
+                      <Link to={`/posts/${post.seriesInfo.prevPostSlug}`} className="btn btn--sm btn--ghost series-nav__btn">
+                        ← Previous
+                      </Link>
+                    ) : (
+                      <span className="btn btn--sm btn--ghost series-nav__btn series-nav__btn--disabled">← Previous</span>
+                    )}
+                    {post.seriesInfo.nextPostSlug ? (
+                      <Link to={`/posts/${post.seriesInfo.nextPostSlug}`} className="btn btn--sm btn--primary series-nav__btn">
+                        Next →
+                      </Link>
+                    ) : (
+                      <span className="btn btn--sm btn--primary series-nav__btn series-nav__btn--disabled">Next →</span>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {post.hasCoverImage && post.coverImageUrl && (
                 <img
@@ -133,7 +166,32 @@ export default function PostDetail() {
 
               <div className="post-detail__divider" />
 
-              <p className="post-detail__content">{post.content}</p>
+              <div className="post-detail__content">
+                <ReactMarkdown
+                  rehypePlugins={[rehypeRaw]}
+                  components={{
+                    code({ className, children, ...props }) {
+                      const match = /language-(\w+)/.exec(className ?? '');
+                      const inline = !match;
+                      if (inline) {
+                        return <code className="inline-code" {...props}>{children}</code>;
+                      }
+                      return (
+                        <SyntaxHighlighter
+                          style={oneLight}
+                          language={match[1]}
+                          PreTag="div"
+                          customStyle={{ borderRadius: 8, fontSize: 14, margin: '1em 0' }}
+                        >
+                          {String(children).replace(/\n$/, '')}
+                        </SyntaxHighlighter>
+                      );
+                    },
+                  }}
+                >
+                  {post.content}
+                </ReactMarkdown>
+              </div>
             </article>
           )}
 
@@ -180,8 +238,10 @@ function formatCommentDate(iso: string) {
 
 function CommentSection({ slug }: { slug: string }) {
   const [comments, setComments] = useState<Comment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadedSlug, setLoadedSlug] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const loading = loadedSlug !== slug;
 
   const [form, setForm] = useState<CommentRequest>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
@@ -190,11 +250,13 @@ function CommentSection({ slug }: { slug: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     fetchComments(slug)
-      .then((data) => { if (!cancelled) setComments(data); })
-      .catch(() => { if (!cancelled) setError('Failed to load comments'); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+      .then((data) => {
+        if (!cancelled) { setComments(data); setError(null); setLoadedSlug(slug); }
+      })
+      .catch(() => {
+        if (!cancelled) { setError('Failed to load comments'); setLoadedSlug(slug); }
+      });
     return () => { cancelled = true; };
   }, [slug]);
 

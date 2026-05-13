@@ -8,6 +8,7 @@
 4. [Triển khai production](#4-triển-khai-production)
 5. [Vận hành hàng ngày](#5-vận-hành-hàng-ngày)
 6. [Xử lý sự cố thường gặp](#6-xử-lý-sự-cố-thường-gặp)
+7. [Phụ lục: Thư viện frontend chính](#7-phụ-lục-thư-viện-frontend-chính)
 
 ---
 
@@ -71,18 +72,33 @@ npm install
 npm run dev
 ```
 
-Frontend sẽ chạy tại `http://localhost:5173`.
+Frontend sẽ chạy tại **`https://localhost:5173`** (HTTPS, cert tự ký).
+
+> **Lưu ý cert tự ký:** Lần đầu mở trình duyệt sẽ hiện cảnh báo "Not secure" hoặc "Your connection is not private". Chọn **Advanced → Proceed to localhost** (Chrome) hoặc **Accept the Risk** (Firefox) để tiếp tục. Đây là bình thường với cert dev.
 
 Vite tự proxy `/api/*` đến backend `http://localhost:18080`.
+
+Nếu chạy trong máy ảo (VMware, VirtualBox...), frontend đã được cấu hình lắng nghe trên tất cả interface (`0.0.0.0`). Truy cập từ máy host bằng IP của VM:
+
+```
+https://<IP-của-VM>:5173
+```
+
+Lấy IP của VM:
+
+```bash
+hostname -I
+# Ví dụ: 192.168.127.12 — dùng IP đầu tiên
+```
 
 ### 2.5 Kiểm tra hoạt động
 
 | URL | Mô tả |
 |-----|-------|
-| `http://localhost:5173` | Trang blog công khai |
-| `http://localhost:5173/admin/login` | Trang đăng nhập admin |
-| `http://localhost:5173/admin/posts` | Quản lý bài viết |
-| `http://localhost:5173/admin/users` | Quản lý người dùng |
+| `https://localhost:5173` | Trang blog công khai |
+| `https://localhost:5173/admin/login` | Trang đăng nhập admin |
+| `https://localhost:5173/admin/posts` | Quản lý bài viết |
+| `https://localhost:5173/admin/users` | Quản lý người dùng |
 | `http://localhost:18080/api/health` | Health check backend |
 
 ---
@@ -135,6 +151,8 @@ npm run build
 ```
 
 Output tại `frontend/dist/` — upload lên web server (Nginx, Caddy, v.v.) hoặc static hosting.
+
+> **Lưu ý:** Plugin `@vitejs/plugin-basic-ssl` chỉ dùng cho dev server, không ảnh hưởng bản build production. Production HTTPS do web server (Nginx + Certbot) xử lý.
 
 ### 4.2 Build backend (JAR)
 
@@ -354,8 +372,32 @@ Kiểm tra backend đang chạy:
 
 ```bash
 curl http://localhost:18080/api/health
-# Phải trả về 200
+# Phải trả về: {"status":"ok"}
 ```
+
+### Không truy cập được từ máy host (VMware / VirtualBox)
+
+**Triệu chứng:** Mở `https://<IP-VM>:5173` từ máy host nhưng không vào được.
+
+Kiểm tra Vite đang bind đúng interface:
+
+```bash
+ss -tlnp | grep 5173
+# Phải thấy 0.0.0.0:5173, không phải 127.0.0.1:5173
+```
+
+Nếu thấy `127.0.0.1`, kiểm tra `frontend/vite.config.ts` có dòng `host: '0.0.0.0'` chưa, sau đó restart Vite.
+
+Kiểm tra firewall trong VM:
+
+```bash
+sudo ufw status
+# Nếu active, mở port:
+sudo ufw allow 5173
+sudo ufw allow 18080
+```
+
+Kiểm tra network mode của VM: phải là **Bridged** hoặc **NAT with port forwarding**, không phải Host-only nếu muốn truy cập từ ngoài.
 
 ### Lỗi 500 khi tạo bài viết
 
@@ -389,3 +431,18 @@ WHERE username = 'admin';
 ```
 
 Cách tạo BCrypt hash: dùng trang online như bcrypt-generator.com (cost factor 10), hoặc thêm một endpoint tạm `/api/auth/reset-password` trong development.
+
+---
+
+## 7. Phụ lục: Thư viện frontend chính
+
+Các thư viện quan trọng được cài thêm ngoài React core — cần biết khi nâng cấp hoặc debug:
+
+| Thư viện | Phiên bản | Mục đích |
+|----------|-----------|----------|
+| `@uiw/react-md-editor` | latest | Editor soạn thảo nội dung bài viết (Markdown, toolbar, preview) |
+| `react-markdown` | latest | Render nội dung Markdown khi xem bài viết |
+| `react-syntax-highlighter` | latest | Syntax highlighting cho code block (SQL, bash, v.v.) trong bài viết |
+| `@vitejs/plugin-basic-ssl` | latest | HTTPS tự ký cho Vite dev server — **chỉ dùng ở development** |
+
+> **Lưu ý nội dung bài viết:** Content được lưu dưới dạng Markdown trong database. Khi migrate dữ liệu cũ (plain text), nội dung vẫn hiển thị được nhưng không có định dạng. Code block trong bài viết sử dụng cú pháp ` ```sql ` hoặc ` ```bash ` và tự động được format khi paste vào editor.

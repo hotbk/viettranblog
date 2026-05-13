@@ -1,5 +1,25 @@
 {
   "permissions": {
+    "allow": [
+      "Bash(mkdir -p /home/setup/vietblog_project/viettranblog/backend/src/main/java/com/example/blog/series)",
+      "Bash(kill 91674)",
+      "Bash(mvn spring-boot:run -q)",
+      "Bash(echo \"New backend PID: $!\")",
+      "Bash(curl -s http://localhost:18080/api/series)",
+      "Bash(curl -s http://localhost:18080/api/posts)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('seriesInfo present:', 'seriesInfo' in d[0]\\)\")",
+      "Bash(curl -s -X POST http://localhost:18080/api/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"Admin@2024!\"}')",
+      "Bash(curl -s http://localhost:18080/api/posts/building-personal-blog-react-spring-boot)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('seriesInfo:', json.dumps\\(d['seriesInfo'], ensure_ascii=False, indent=2\\)\\)\")",
+      "Bash(curl -sk -X POST https://localhost:5174/api/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"Admin@2024!\"}')",
+      "Bash(docker exec *)",
+      "Bash(# Kiểm tra xem Vite instance cũ \\(port 5173\\) có proxy đúng không *)",
+      "Read(//proc/192942/fd/**)",
+      "Read(//proc/192942/**)",
+      "Bash(curl -sk -X POST http://192.168.127.12:5173/api/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"Admin@2024!\"}' -w '\\\\nHTTP: %{http_code}')",
+      "Bash(curl -sk -X POST https://192.168.127.12:5173/api/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"Admin@2024!\"}' -w '\\\\nHTTP: %{http_code}')",
+      "Bash(kill 192942 192941 192927)"
+    ],
     "deny": [
       "Bash(rm -rf *)",
       "Bash(git push --force*)",
@@ -9,6 +29,9 @@
       "Edit(.env)",
       "Read(**/*private*)",
       "Read(**/*secret*)"
+    ],
+    "additionalDirectories": [
+      "/home/setup/vietblog_project/viettranblog/backend/src/main/java/com/example/blog"
     ]
   }
 }

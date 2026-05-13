@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchPosts } from './api';
-import type { BlogPost } from './types';
+import { fetchPosts, fetchPublicExams } from './api';
+import type { BlogPost, ExamSummary } from './types';
 import { isAuthenticated } from './auth';
+import { isMemberAuthenticated } from './memberAuth';
+import NavBrand from './components/NavBrand';
 
 function formatDate(value: string | null): string {
   if (!value) return 'Unpublished';
@@ -31,6 +33,8 @@ export default function App() {
   const [category, setCategory] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [exams, setExams] = useState<ExamSummary[]>([]);
+  const isMember = isMemberAuthenticated();
 
   const categories = useMemo(() => {
     return Array.from(new Set(posts.map((post) => post.category).filter(Boolean))).sort();
@@ -57,6 +61,10 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, category]);
 
+  useEffect(() => {
+    fetchPublicExams().then(setExams).catch(() => { /* non-critical */ });
+  }, []);
+
   const authenticated = isAuthenticated();
 
   return (
@@ -64,12 +72,15 @@ export default function App() {
       {/* ── Navbar ─────────────────────────────── */}
       <nav className="site-nav">
         <div className="site-nav__inner">
-          <Link to="/" className="site-nav__brand">
-            <div className="site-nav__logo">VT</div>
-            <span className="site-nav__name">viettran Blog</span>
-          </Link>
+          <NavBrand />
           <div className="site-nav__links">
             <Link to="/" className="site-nav__link">Home</Link>
+            <Link to="/series" className="site-nav__link">Series</Link>
+            {isMember ? (
+              <Link to="/member/exams" className="site-nav__link">Exams</Link>
+            ) : (
+              <Link to="/member/login" className="site-nav__link">Exams</Link>
+            )}
             {authenticated ? (
               <Link to="/admin/posts" className="site-nav__link site-nav__link--accent">Admin</Link>
             ) : (
@@ -181,6 +192,41 @@ export default function App() {
         </section>
       </div>
 
+      {/* ── Exams section ──────────────────────── */}
+      {exams.length > 0 && (
+        <div className="container" style={{ marginTop: 48, marginBottom: 32 }}>
+          <div className="home-exams-header">
+            <p className="section-label">Quizzes &amp; Exams</p>
+            <p className="home-exams-sub">Test your knowledge — sign in with a member account to take a quiz.</p>
+          </div>
+          <div className="home-exams-grid">
+            {exams.map((exam) => (
+              <div key={exam.id} className="home-exam-card">
+                <div className="home-exam-card__top">
+                  <h3 className="home-exam-card__title">{exam.title}</h3>
+                  <span className="home-exam-card__badge">{exam.questionCount} Q{exam.timeLimit ? ` · ${exam.timeLimit}m` : ''}</span>
+                </div>
+                {exam.description && (
+                  <p className="home-exam-card__desc">{exam.description}</p>
+                )}
+                <div className="home-exam-card__action">
+                  {isMember ? (
+                    <Link to={`/member/exams/${exam.id}`} className="btn btn--primary btn--sm">Start exam</Link>
+                  ) : (
+                    <Link to="/member/login" className="btn btn--ghost btn--sm">Sign in to take</Link>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          {isMember && (
+            <div style={{ marginTop: 16 }}>
+              <Link to="/member/exams" className="btn btn--ghost btn--sm">View all exams →</Link>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Footer ─────────────────────────────── */}
       <footer className="site-footer">
         <p className="site-footer__text">
@@ -227,6 +273,7 @@ function PostCard({ post }: { post: BlogPost }) {
         <Link to={`/posts/${post.slug}`} className="post-card__read-more">
           Read more
         </Link>
+        <span className="post-card__views">{(post.viewCount ?? 0).toLocaleString()} views</span>
       </div>
     </article>
   );

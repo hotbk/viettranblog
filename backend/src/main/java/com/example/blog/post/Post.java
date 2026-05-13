@@ -60,6 +60,9 @@ public class Post {
     @Column(name = "cover_image_size")
     private Long coverImageSize;
 
+    @Column(nullable = false, columnDefinition = "bigint default 0")
+    private long viewCount = 0;
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();
@@ -108,4 +111,6 @@ public class Post {
     public void setCoverImageOriginalFilename(String coverImageOriginalFilename) { this.coverImageOriginalFilename = coverImageOriginalFilename; }
     public Long getCoverImageSize() { return coverImageSize; }
     public void setCoverImageSize(Long coverImageSize) { this.coverImageSize = coverImageSize; }
+    public long getViewCount() { return viewCount; }
+    public void setViewCount(long viewCount) { this.viewCount = viewCount; }
 }
