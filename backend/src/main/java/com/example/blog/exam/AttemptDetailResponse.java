@@ -1,5 +1,6 @@
 package com.example.blog.exam;
 
+import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Set;
@@ -18,6 +19,7 @@ public record AttemptDetailResponse(
         String startedAt,
         String submittedAt,
         String status,
+        Long durationSeconds,
         List<AnswerResultResponse> answers
 ) {
     private static final DateTimeFormatter FMT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
@@ -67,6 +69,9 @@ public record AttemptDetailResponse(
         Double passScore = a.getExam().getPassScore();
         Double scaledScore = computeScaledScore(a.getScore(), a.getTotalPoints(), scoreScale);
         Boolean passed = (scaledScore != null && passScore != null) ? scaledScore >= passScore : null;
+        Long durationSeconds = (a.getStartedAt() != null && a.getSubmittedAt() != null)
+                ? Duration.between(a.getStartedAt(), a.getSubmittedAt()).getSeconds()
+                : null;
 
         return new AttemptDetailResponse(
                 a.getId(),
@@ -81,6 +86,7 @@ public record AttemptDetailResponse(
                 a.getStartedAt() != null ? a.getStartedAt().format(FMT) : null,
                 a.getSubmittedAt() != null ? a.getSubmittedAt().format(FMT) : null,
                 a.getStatus().name(),
+                durationSeconds,
                 answers
         );
     }

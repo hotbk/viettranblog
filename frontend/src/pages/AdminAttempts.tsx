@@ -4,6 +4,13 @@ import { fetchAdminAttempts, fetchAdminExams, UnauthorizedError } from '../api';
 import { logout } from '../auth';
 import type { AdminAttemptSummary, ExamSummary } from '../types';
 
+function formatDuration(seconds: number | null): string {
+  if (seconds == null) return '—';
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
 function formatDate(s: string | null): string {
   if (!s) return '—';
   const d = new Date(s);
@@ -169,6 +176,7 @@ export default function AdminAttempts() {
                   <th>User</th>
                   <th>Exam</th>
                   <th>Score</th>
+                  <th>Duration</th>
                   <th>Status</th>
                   <th>Started</th>
                   <th>Submitted</th>
@@ -186,6 +194,7 @@ export default function AdminAttempts() {
                       </Link>
                     </td>
                     <td><ScoreBadge score={a.score} total={a.totalPoints} scaledScore={a.scaledScore} scoreScale={a.scoreScale} passed={a.passed} /></td>
+                    <td style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{formatDuration(a.durationSeconds)}</td>
                     <td>
                       <span className={`post-status-badge${a.status === 'SUBMITTED' ? ' post-status-badge--published' : ''}`}>
                         {a.status === 'SUBMITTED' ? 'Submitted' : 'In progress'}

@@ -119,6 +119,7 @@ export interface AttemptSummary {
   startedAt: string;
   submittedAt: string | null;
   status: 'IN_PROGRESS' | 'SUBMITTED';
+  durationSeconds: number | null;
 }
 
 export interface AdminAttemptSummary extends AttemptSummary {

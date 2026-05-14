@@ -7,6 +7,13 @@ import { memberLogout } from '../memberAuth';
 import type { AttemptDetail } from '../types';
 import NavBrand from '../components/NavBrand';
 
+function formatDuration(seconds: number | null): string {
+  if (seconds == null) return '—';
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
 function formatDate(s: string | null): string {
   if (!s) return '—';
   const d = new Date(s);
@@ -97,6 +104,9 @@ export default function MemberAttemptResult() {
                 )}
                 <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
                   Submitted: {formatDate(result.submittedAt)}
+                  {result.durationSeconds != null && (
+                    <span style={{ marginLeft: 12 }}>· Duration: {formatDuration(result.durationSeconds)}</span>
+                  )}
                 </p>
               </div>
 

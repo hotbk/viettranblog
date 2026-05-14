@@ -14,6 +14,7 @@ public record AdminAttemptDetailResponse(
         String startedAt,
         String submittedAt,
         String status,
+        Long durationSeconds,
         List<AttemptDetailResponse.AnswerResultResponse> answers
 ) {
     private static final DateTimeFormatter FMT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
@@ -31,6 +32,7 @@ public record AdminAttemptDetailResponse(
                 base.startedAt(),
                 base.submittedAt(),
                 base.status(),
+                base.durationSeconds(),
                 base.answers()
         );
     }
