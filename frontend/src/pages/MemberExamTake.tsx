@@ -31,6 +31,7 @@ export default function MemberExamTake() {
   const [exam, setExam] = useState<ExamDetailMember | null>(null);
   const [attemptId, setAttemptId] = useState<number | null>(null);
   const [answers, setAnswers] = useState<Record<number, number[]>>({});
+  const [textAnswers, setTextAnswers] = useState<Record<number, string>>({});
   const [result, setResult] = useState<AttemptDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -51,13 +52,22 @@ export default function MemberExamTake() {
     return () => { cancelled = true; };
   }, [id, navigate]);
 
-  const handleSubmit = useCallback(async (currentAnswers: Record<number, number[]>, currentAttemptId: number) => {
+  const handleSubmit = useCallback(async (
+    currentAnswers: Record<number, number[]>,
+    currentTextAnswers: Record<number, string>,
+    currentAttemptId: number,
+  ) => {
     if (submitting) return;
     setSubmitting(true);
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    const payload = Object.entries(currentAnswers).map(([qId, optIds]) => ({
-      questionId: Number(qId),
-      selectedOptionIds: optIds,
+    const allQuestionIds = new Set([
+      ...Object.keys(currentAnswers).map(Number),
+      ...Object.keys(currentTextAnswers).map(Number),
+    ]);
+    const payload = Array.from(allQuestionIds).map((qId) => ({
+      questionId: qId,
+      selectedOptionIds: currentAnswers[qId] ?? [],
+      textAnswer: currentTextAnswers[qId],
     }));
     try {
       const detail = await submitAttempt(currentAttemptId, payload);
@@ -81,9 +91,17 @@ export default function MemberExamTake() {
     try {
       const attempt = await startAttempt(Number(id));
       setAttemptId(attempt.id);
-      const init: Record<number, number[]> = {};
-      exam.questions.forEach((q) => { init[q.id] = []; });
-      setAnswers(init);
+      const initOpts: Record<number, number[]> = {};
+      const initText: Record<number, string> = {};
+      exam.questions.forEach((q) => {
+        if (q.questionType === 'TEXT_INPUT') {
+          initText[q.id] = '';
+        } else {
+          initOpts[q.id] = [];
+        }
+      });
+      setAnswers(initOpts);
+      setTextAnswers(initText);
       if (exam.timeLimit) {
         const totalSecs = exam.timeLimit * 60;
         setTimeLeft(totalSecs);
@@ -91,7 +109,7 @@ export default function MemberExamTake() {
           setTimeLeft((prev) => {
             if (prev === null || prev <= 1) {
               if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-              handleSubmit(init, attempt.id);
+              handleSubmit(initOpts, initText, attempt.id);
               return 0;
             }
             return prev - 1;
@@ -120,15 +138,18 @@ export default function MemberExamTake() {
 
   function handleManualSubmit() {
     if (!attemptId) return;
-    const answered = Object.values(answers).filter((v) => v.length > 0).length;
+    const optAnswered = Object.values(answers).filter((v) => v.length > 0).length;
+    const textAnswered = Object.values(textAnswers).filter((v) => v.trim().length > 0).length;
+    const answered = optAnswered + textAnswered;
     const total = exam?.questions.length ?? 0;
     if (answered < total) {
       if (!window.confirm(`You have ${total - answered} unanswered question(s). Submit anyway?`)) return;
     }
-    handleSubmit(answers, attemptId);
+    handleSubmit(answers, textAnswers, attemptId);
   }
 
-  const answeredCount = Object.values(answers).filter((v) => v.length > 0).length;
+  const answeredCount = Object.values(answers).filter((v) => v.length > 0).length
+    + Object.values(textAnswers).filter((v) => v.trim().length > 0).length;
   const totalQuestions = exam?.questions.length ?? 0;
 
   return (
@@ -189,6 +210,7 @@ export default function MemberExamTake() {
 
               <ol className="exam-question-list">
                 {exam.questions.map((q, idx) => {
+                  const isText = q.questionType === 'TEXT_INPUT';
                   const isMulti = q.questionType === 'MULTIPLE_CHOICE';
                   const selected = answers[q.id] ?? [];
                   return (
@@ -201,31 +223,50 @@ export default function MemberExamTake() {
                             Select all that apply
                           </span>
                         )}
+                        {isText && (
+                          <span style={{ fontSize: 11, padding: '2px 6px', borderRadius: 4,
+                            background: 'var(--color-success)', color: '#fff' }}>
+                            Fill in the blank
+                          </span>
+                        )}
                         <span className="exam-take-question__pts">{q.points} pt{q.points !== 1 ? 's' : ''}</span>
                       </div>
                       <div className="exam-take-question__content exam-md-content">
                         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{q.content}</ReactMarkdown>
                       </div>
-                      <div className="exam-take-options">
-                        {q.options.map((opt) => {
-                          const checked = selected.includes(opt.id);
-                          return (
-                            <label
-                              key={opt.id}
-                              className={`exam-take-option${checked ? ' exam-take-option--selected' : ''}`}
-                            >
-                              {isMulti ? (
-                                <input type="checkbox" value={opt.id} checked={checked}
-                                  onChange={() => handleMultiAnswer(q.id, opt.id)} />
-                              ) : (
-                                <input type="radio" name={`q-${q.id}`} value={opt.id} checked={checked}
-                                  onChange={() => handleSingleAnswer(q.id, opt.id)} />
-                              )}
-                              <span>{opt.content}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
+                      {isText ? (
+                        <div className="exam-take-options">
+                          <textarea
+                            className="field__textarea"
+                            rows={3}
+                            placeholder="Nhập câu trả lời của bạn..."
+                            value={textAnswers[q.id] ?? ''}
+                            onChange={(e) => setTextAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                            style={{ width: '100%', resize: 'vertical' }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="exam-take-options">
+                          {q.options.map((opt) => {
+                            const checked = selected.includes(opt.id);
+                            return (
+                              <label
+                                key={opt.id}
+                                className={`exam-take-option${checked ? ' exam-take-option--selected' : ''}`}
+                              >
+                                {isMulti ? (
+                                  <input type="checkbox" value={opt.id} checked={checked}
+                                    onChange={() => handleMultiAnswer(q.id, opt.id)} />
+                                ) : (
+                                  <input type="radio" name={`q-${q.id}`} value={opt.id} checked={checked}
+                                    onChange={() => handleSingleAnswer(q.id, opt.id)} />
+                                )}
+                                <span>{opt.content}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
                     </li>
                   );
                 })}
@@ -285,17 +326,36 @@ export default function MemberExamTake() {
                       <span className="exam-result-item__verdict">{ans.correct ? '✓ Correct' : '✗ Wrong'}</span>
                     </div>
                     <p className="exam-result-item__question">{ans.questionContent}</p>
-                    {ans.selectedOptionContents.length > 0 ? (
-                      <p className="exam-result-item__answer">
-                        Your answer: <strong>{ans.selectedOptionContents.join(', ')}</strong>
-                      </p>
+                    {ans.questionType === 'TEXT_INPUT' ? (
+                      <>
+                        {ans.textAnswer ? (
+                          <p className="exam-result-item__answer">
+                            Your answer: <strong>{ans.textAnswer}</strong>
+                          </p>
+                        ) : (
+                          <p className="exam-result-item__answer" style={{ color: 'var(--color-text-muted)' }}>No answer</p>
+                        )}
+                        {!ans.correct && ans.correctTextAnswer && (
+                          <p className="exam-result-item__correct">
+                            Correct answer: <strong>{ans.correctTextAnswer}</strong>
+                          </p>
+                        )}
+                      </>
                     ) : (
-                      <p className="exam-result-item__answer" style={{ color: 'var(--color-text-muted)' }}>No answer</p>
-                    )}
-                    {!ans.correct && ans.correctOptionContents.length > 0 && (
-                      <p className="exam-result-item__correct">
-                        Correct answer: <strong>{ans.correctOptionContents.join(', ')}</strong>
-                      </p>
+                      <>
+                        {ans.selectedOptionContents.length > 0 ? (
+                          <p className="exam-result-item__answer">
+                            Your answer: <strong>{ans.selectedOptionContents.join(', ')}</strong>
+                          </p>
+                        ) : (
+                          <p className="exam-result-item__answer" style={{ color: 'var(--color-text-muted)' }}>No answer</p>
+                        )}
+                        {!ans.correct && ans.correctOptionContents.length > 0 && (
+                          <p className="exam-result-item__correct">
+                            Correct answer: <strong>{ans.correctOptionContents.join(', ')}</strong>
+                          </p>
+                        )}
+                      </>
                     )}
                   </li>
                 ))}

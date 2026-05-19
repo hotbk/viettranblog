@@ -32,7 +32,9 @@ public record AttemptDetailResponse(
             List<String> selectedOptionContents,
             boolean correct,
             List<Long> correctOptionIds,
-            List<String> correctOptionContents
+            List<String> correctOptionContents,
+            String textAnswer,
+            String correctTextAnswer
     ) {}
 
     static Double computeScaledScore(Integer score, Integer total, Integer scale) {
@@ -61,7 +63,9 @@ public record AttemptDetailResponse(
                     selectedContents,
                     Boolean.TRUE.equals(ans.getCorrect()),
                     correctOpts.stream().map(QuestionOption::getId).toList(),
-                    correctOpts.stream().map(QuestionOption::getContent).toList()
+                    correctOpts.stream().map(QuestionOption::getContent).toList(),
+                    ans.getTextAnswer(),
+                    q.getCorrectTextAnswer()
             );
         }).toList();
 

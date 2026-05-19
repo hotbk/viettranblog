@@ -71,7 +71,7 @@ export interface OptionMember {
   orderIndex: number;
 }
 
-export type QuestionType = 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE';
+export type QuestionType = 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TEXT_INPUT';
 
 export interface QuestionAdmin {
   id: number;
@@ -80,6 +80,7 @@ export interface QuestionAdmin {
   points: number;
   questionType: QuestionType;
   options: OptionAdmin[];
+  correctTextAnswer: string | null;
 }
 
 export interface QuestionMember {
@@ -140,6 +141,8 @@ export interface AnswerResult {
   correct: boolean;
   correctOptionIds: number[];
   correctOptionContents: string[];
+  textAnswer: string | null;
+  correctTextAnswer: string | null;
 }
 
 export interface AttemptDetail extends AttemptSummary {

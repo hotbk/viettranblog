@@ -120,13 +120,28 @@ export default function MemberAttemptResult() {
                     <div className="exam-result-item__question exam-md-content">
                       <ReactMarkdown rehypePlugins={[rehypeRaw]}>{ans.questionContent}</ReactMarkdown>
                     </div>
-                    {ans.selectedOptionContents.length > 0 ? (
-                      <p className="exam-result-item__answer">Your answer: <strong>{ans.selectedOptionContents.join(', ')}</strong></p>
+                    {ans.questionType === 'TEXT_INPUT' ? (
+                      <>
+                        {ans.textAnswer ? (
+                          <p className="exam-result-item__answer">Your answer: <strong>{ans.textAnswer}</strong></p>
+                        ) : (
+                          <p className="exam-result-item__answer" style={{ color: 'var(--color-text-muted)' }}>No answer</p>
+                        )}
+                        {!ans.correct && ans.correctTextAnswer && (
+                          <p className="exam-result-item__correct">Correct answer: <strong>{ans.correctTextAnswer}</strong></p>
+                        )}
+                      </>
                     ) : (
-                      <p className="exam-result-item__answer" style={{ color: 'var(--color-text-muted)' }}>No answer</p>
-                    )}
-                    {!ans.correct && ans.correctOptionContents.length > 0 && (
-                      <p className="exam-result-item__correct">Correct answer: <strong>{ans.correctOptionContents.join(', ')}</strong></p>
+                      <>
+                        {ans.selectedOptionContents.length > 0 ? (
+                          <p className="exam-result-item__answer">Your answer: <strong>{ans.selectedOptionContents.join(', ')}</strong></p>
+                        ) : (
+                          <p className="exam-result-item__answer" style={{ color: 'var(--color-text-muted)' }}>No answer</p>
+                        )}
+                        {!ans.correct && ans.correctOptionContents.length > 0 && (
+                          <p className="exam-result-item__correct">Correct answer: <strong>{ans.correctOptionContents.join(', ')}</strong></p>
+                        )}
+                      </>
                     )}
                   </li>
                 ))}

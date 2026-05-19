@@ -360,6 +360,7 @@ export interface QuestionRequest {
   points: number;
   questionType: string;
   options: { content: string; correct: boolean; orderIndex: number }[];
+  correctTextAnswer?: string | null;
 }
 
 export async function fetchAdminExams(): Promise<ExamSummary[]> {
@@ -463,7 +464,7 @@ export async function startAttempt(examId: number): Promise<AttemptSummary> {
 
 export async function submitAttempt(
   attemptId: number,
-  answers: { questionId: number; selectedOptionIds: number[] }[],
+  answers: { questionId: number; selectedOptionIds: number[]; textAnswer?: string }[],
 ): Promise<AttemptDetail> {
   const res = await fetch(`${API_BASE_URL}/member/attempts/${attemptId}/submit`, {
     method: 'POST',

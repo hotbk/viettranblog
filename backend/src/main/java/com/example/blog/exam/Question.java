@@ -29,6 +29,9 @@ public class Question {
     @Column(nullable = false)
     private QuestionType questionType = QuestionType.SINGLE_CHOICE;
 
+    @Column(columnDefinition = "TEXT")
+    private String correctTextAnswer;
+
     @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("orderIndex ASC")
     private List<QuestionOption> options = new ArrayList<>();
@@ -44,5 +47,7 @@ public class Question {
     public void setPoints(Integer points) { this.points = points; }
     public QuestionType getQuestionType() { return questionType; }
     public void setQuestionType(QuestionType questionType) { this.questionType = questionType; }
+    public String getCorrectTextAnswer() { return correctTextAnswer; }
+    public void setCorrectTextAnswer(String correctTextAnswer) { this.correctTextAnswer = correctTextAnswer; }
     public List<QuestionOption> getOptions() { return options; }
 }

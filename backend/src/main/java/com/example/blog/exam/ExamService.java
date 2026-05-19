@@ -91,9 +91,10 @@ public class ExamService {
         q.setContent(req.content());
         q.setOrderIndex(req.orderIndex());
         q.setPoints(req.points());
-        q.setQuestionType(parseQuestionType(req.questionType()));
+        QuestionType type = parseQuestionType(req.questionType());
+        q.setQuestionType(type);
         q.getOptions().clear();
-        if (req.options() != null) {
+        if (type != QuestionType.TEXT_INPUT && req.options() != null) {
             for (OptionRequest or : req.options()) {
                 QuestionOption opt = new QuestionOption();
                 opt.setContent(or.content());
@@ -103,6 +104,7 @@ public class ExamService {
                 q.getOptions().add(opt);
             }
         }
+        q.setCorrectTextAnswer(type == QuestionType.TEXT_INPUT ? req.correctTextAnswer() : null);
         questionRepository.save(q);
         return QuestionAdminResponse.from(q);
     }
@@ -181,14 +183,16 @@ public class ExamService {
 
         Exam exam = attempt.getExam();
 
-        // Build map: questionId -> list of selected option IDs
-        Map<Long, List<Long>> answerMap = req.answers() == null ? Map.of()
-                : req.answers().stream()
-                        .filter(a -> a.questionId() != null)
-                        .collect(Collectors.toMap(
-                                SubmitAttemptRequest.AnswerRequest::questionId,
-                                a -> a.selectedOptionIds() == null ? List.of() : a.selectedOptionIds(),
-                                (a, b) -> a));
+        // Build maps for option-based and text-based answers
+        Map<Long, List<Long>> optionAnswerMap = new java.util.HashMap<>();
+        Map<Long, String> textAnswerMap = new java.util.HashMap<>();
+        if (req.answers() != null) {
+            for (SubmitAttemptRequest.AnswerRequest a : req.answers()) {
+                if (a.questionId() == null) continue;
+                optionAnswerMap.put(a.questionId(), a.selectedOptionIds() == null ? List.of() : a.selectedOptionIds());
+                if (a.textAnswer() != null) textAnswerMap.put(a.questionId(), a.textAnswer());
+            }
+        }
 
         int score = 0;
         int total = 0;
@@ -196,27 +200,33 @@ public class ExamService {
 
         for (Question q : exam.getQuestions()) {
             total += q.getPoints();
-            List<Long> selectedIds = answerMap.getOrDefault(q.getId(), List.of());
 
             ExamAnswer ea = new ExamAnswer();
             ea.setAttempt(attempt);
             ea.setQuestion(q);
 
-            // Resolve selected options
-            List<QuestionOption> selectedOpts = q.getOptions().stream()
-                    .filter(o -> selectedIds.contains(o.getId()))
-                    .toList();
-            ea.setSelectedOptions(new ArrayList<>(selectedOpts));
+            boolean correct;
+            if (q.getQuestionType() == QuestionType.TEXT_INPUT) {
+                String submitted = textAnswerMap.getOrDefault(q.getId(), "").trim();
+                String expected = q.getCorrectTextAnswer() != null ? q.getCorrectTextAnswer().trim() : "";
+                ea.setTextAnswer(submitted);
+                correct = !expected.isEmpty() && submitted.equalsIgnoreCase(expected);
+            } else {
+                List<Long> selectedIds = optionAnswerMap.getOrDefault(q.getId(), List.of());
+                List<QuestionOption> selectedOpts = q.getOptions().stream()
+                        .filter(o -> selectedIds.contains(o.getId()))
+                        .toList();
+                ea.setSelectedOptions(new ArrayList<>(selectedOpts));
 
-            // Grade: exact match of correct set
-            Set<Long> correctIds = q.getOptions().stream()
-                    .filter(o -> Boolean.TRUE.equals(o.getCorrect()))
-                    .map(QuestionOption::getId)
-                    .collect(Collectors.toSet());
-            Set<Long> selectedSet = selectedOpts.stream()
-                    .map(QuestionOption::getId)
-                    .collect(Collectors.toSet());
-            boolean correct = !correctIds.isEmpty() && correctIds.equals(selectedSet);
+                Set<Long> correctIds = q.getOptions().stream()
+                        .filter(o -> Boolean.TRUE.equals(o.getCorrect()))
+                        .map(QuestionOption::getId)
+                        .collect(Collectors.toSet());
+                Set<Long> selectedSet = selectedOpts.stream()
+                        .map(QuestionOption::getId)
+                        .collect(Collectors.toSet());
+                correct = !correctIds.isEmpty() && correctIds.equals(selectedSet);
+            }
             ea.setCorrect(correct);
             if (correct) score += q.getPoints();
 
@@ -296,8 +306,9 @@ public class ExamService {
         q.setContent(req.content());
         q.setOrderIndex(req.orderIndex());
         q.setPoints(req.points() > 0 ? req.points() : 1);
-        q.setQuestionType(parseQuestionType(req.questionType()));
-        if (req.options() != null) {
+        QuestionType type = parseQuestionType(req.questionType());
+        q.setQuestionType(type);
+        if (type != QuestionType.TEXT_INPUT && req.options() != null) {
             for (OptionRequest or : req.options()) {
                 QuestionOption opt = new QuestionOption();
                 opt.setContent(or.content());
@@ -307,6 +318,7 @@ public class ExamService {
                 q.getOptions().add(opt);
             }
         }
+        q.setCorrectTextAnswer(type == QuestionType.TEXT_INPUT ? req.correctTextAnswer() : null);
         return q;
     }
 }

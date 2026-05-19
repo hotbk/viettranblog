@@ -23,6 +23,7 @@ interface QuestionDraft {
   points: number;
   questionType: QuestionType;
   options: OptionDraft[];
+  correctTextAnswer: string;
   editing: boolean;
 }
 
@@ -38,6 +39,7 @@ function makeBlankQuestion(orderIndex: number): QuestionDraft {
       { content: '', correct: false, orderIndex: 2 },
       { content: '', correct: false, orderIndex: 3 },
     ],
+    correctTextAnswer: '',
     editing: true,
   };
 }
@@ -55,6 +57,7 @@ function questionFromApi(q: QuestionAdmin): QuestionDraft {
       correct: o.correct,
       orderIndex: o.orderIndex,
     })),
+    correctTextAnswer: q.correctTextAnswer ?? '',
     editing: false,
   };
 }
@@ -180,11 +183,9 @@ export default function AdminExamForm() {
     }));
   }
 
-  function toggleQuestionType(qIdx: number) {
+  function setQuestionType(qIdx: number, next: QuestionType) {
     setQuestions((prev) => prev.map((q, i) => {
       if (i !== qIdx) return q;
-      const next: QuestionType = q.questionType === 'SINGLE_CHOICE' ? 'MULTIPLE_CHOICE' : 'SINGLE_CHOICE';
-      // When switching to single, keep only the first correct option
       let opts = q.options;
       if (next === 'SINGLE_CHOICE') {
         let foundFirst = false;
@@ -208,20 +209,33 @@ export default function AdminExamForm() {
   async function handleSaveQuestion(idx: number) {
     if (!examId) return;
     const q = questions[idx];
-    // Validate
     if (!q.content.trim()) { showToast('Question text is required.', 'error'); return; }
-    const nonEmpty = q.options.filter((o) => o.content.trim());
-    if (nonEmpty.length < 2) { showToast('At least 2 options are required.', 'error'); return; }
-    const hasCorrect = nonEmpty.some((o) => o.correct);
-    if (!hasCorrect) { showToast('Mark at least one correct answer.', 'error'); return; }
 
-    const payload = {
-      content: q.content,
-      orderIndex: q.orderIndex,
-      points: q.points,
-      questionType: q.questionType,
-      options: nonEmpty.map((o, i) => ({ content: o.content, correct: o.correct, orderIndex: i })),
-    };
+    let payload: Parameters<typeof addQuestion>[1];
+    if (q.questionType === 'TEXT_INPUT') {
+      if (!q.correctTextAnswer.trim()) { showToast('Correct answer is required.', 'error'); return; }
+      payload = {
+        content: q.content,
+        orderIndex: q.orderIndex,
+        points: q.points,
+        questionType: q.questionType,
+        options: [],
+        correctTextAnswer: q.correctTextAnswer.trim(),
+      };
+    } else {
+      const nonEmpty = q.options.filter((o) => o.content.trim());
+      if (nonEmpty.length < 2) { showToast('At least 2 options are required.', 'error'); return; }
+      const hasCorrect = nonEmpty.some((o) => o.correct);
+      if (!hasCorrect) { showToast('Mark at least one correct answer.', 'error'); return; }
+      payload = {
+        content: q.content,
+        orderIndex: q.orderIndex,
+        points: q.points,
+        questionType: q.questionType,
+        options: nonEmpty.map((o, i) => ({ content: o.content, correct: o.correct, orderIndex: i })),
+        correctTextAnswer: null,
+      };
+    }
     try {
       let saved: QuestionAdmin;
       if (q.id) {
@@ -381,18 +395,26 @@ export default function AdminExamForm() {
                             <ReactMarkdown rehypePlugins={[rehypeRaw]}>{q.content}</ReactMarkdown>
                           </div>
                           <span style={{ fontSize: 11, padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap',
-                            background: q.questionType === 'MULTIPLE_CHOICE' ? 'var(--color-accent)' : 'var(--color-border)',
-                            color: q.questionType === 'MULTIPLE_CHOICE' ? '#fff' : 'var(--color-text-muted)' }}>
-                            {q.questionType === 'MULTIPLE_CHOICE' ? 'Multiple choice' : 'Single choice'}
+                            background: q.questionType === 'MULTIPLE_CHOICE' ? 'var(--color-accent)'
+                              : q.questionType === 'TEXT_INPUT' ? 'var(--color-success)' : 'var(--color-border)',
+                            color: q.questionType === 'MULTIPLE_CHOICE' || q.questionType === 'TEXT_INPUT' ? '#fff' : 'var(--color-text-muted)' }}>
+                            {q.questionType === 'MULTIPLE_CHOICE' ? 'Multiple choice'
+                              : q.questionType === 'TEXT_INPUT' ? 'Fill in the blank' : 'Single choice'}
                           </span>
                         </div>
-                        <ul className="exam-question-card__options">
-                          {q.options.map((o, oIdx) => (
-                            <li key={o.id ?? oIdx} className={`exam-option${o.correct ? ' exam-option--correct' : ''}`}>
-                              {o.correct ? '✓ ' : '○ '}{o.content}
-                            </li>
-                          ))}
-                        </ul>
+                        {q.questionType === 'TEXT_INPUT' ? (
+                          <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+                            Đáp án: <strong style={{ color: 'var(--color-text)' }}>{q.correctTextAnswer || '—'}</strong>
+                          </p>
+                        ) : (
+                          <ul className="exam-question-card__options">
+                            {q.options.map((o, oIdx) => (
+                              <li key={o.id ?? oIdx} className={`exam-option${o.correct ? ' exam-option--correct' : ''}`}>
+                                {o.correct ? '✓ ' : '○ '}{o.content}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                         <span className="exam-question-card__points">{q.points} pt{q.points !== 1 ? 's' : ''}</span>
                       </div>
                     ) : (
@@ -447,50 +469,65 @@ export default function AdminExamForm() {
                             <div className="status-toggle">
                               <button type="button"
                                 className={`status-toggle__option${q.questionType === 'SINGLE_CHOICE' ? ' status-toggle__option--active-draft' : ''}`}
-                                onClick={() => q.questionType !== 'SINGLE_CHOICE' && toggleQuestionType(qIdx)}>
+                                onClick={() => q.questionType !== 'SINGLE_CHOICE' && setQuestionType(qIdx, 'SINGLE_CHOICE')}>
                                 Single choice
                               </button>
                               <button type="button"
                                 className={`status-toggle__option${q.questionType === 'MULTIPLE_CHOICE' ? ' status-toggle__option--active-published' : ''}`}
-                                onClick={() => q.questionType !== 'MULTIPLE_CHOICE' && toggleQuestionType(qIdx)}>
+                                onClick={() => q.questionType !== 'MULTIPLE_CHOICE' && setQuestionType(qIdx, 'MULTIPLE_CHOICE')}>
                                 Multiple choice
+                              </button>
+                              <button type="button"
+                                className={`status-toggle__option${q.questionType === 'TEXT_INPUT' ? ' status-toggle__option--active-published' : ''}`}
+                                onClick={() => q.questionType !== 'TEXT_INPUT' && setQuestionType(qIdx, 'TEXT_INPUT')}>
+                                Fill in blank
                               </button>
                             </div>
                           </div>
                         </div>
 
-                        <div style={{ marginTop: 16 }}>
-                          <p className="field__label" style={{ marginBottom: 8 }}>
-                            Answer Options{' '}
-                            <span style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>
-                              {q.questionType === 'MULTIPLE_CHOICE'
-                                ? '(check all correct answers)'
-                                : '(select the one correct answer)'}
-                            </span>
-                          </p>
-                          {q.options.map((o, oIdx) => (
-                            <div key={oIdx} className="exam-option-row">
-                              {q.questionType === 'MULTIPLE_CHOICE' ? (
-                                <input type="checkbox" checked={o.correct}
-                                  onChange={() => toggleCorrectMulti(qIdx, oIdx)} />
-                              ) : (
-                                <input type="radio" name={`correct-${qIdx}`} checked={o.correct}
-                                  onChange={() => setCorrectOption(qIdx, oIdx)} />
-                              )}
-                              <input className="field__input" type="text" value={o.content}
-                                placeholder={`Option ${oIdx + 1}`}
-                                onChange={(e) => updateOptionDraft(qIdx, oIdx, { content: e.target.value })} />
-                              {q.options.length > 2 && (
-                                <button type="button" className="btn btn--danger-ghost btn--sm"
-                                  onClick={() => removeOption(qIdx, oIdx)}>✕</button>
-                              )}
-                            </div>
-                          ))}
-                          {q.options.length < 6 && (
-                            <button type="button" className="btn btn--ghost btn--sm" style={{ marginTop: 8 }}
-                              onClick={() => addOption(qIdx)}>+ Add option</button>
-                          )}
-                        </div>
+                        {q.questionType === 'TEXT_INPUT' ? (
+                          <div className="field field--full" style={{ marginTop: 16 }}>
+                            <label className="field__label field__label--required">Đáp án đúng</label>
+                            <input className="field__input" type="text"
+                              placeholder="Nhập đáp án chính xác (so sánh không phân biệt hoa thường)"
+                              value={q.correctTextAnswer}
+                              onChange={(e) => updateQuestionDraft(qIdx, { correctTextAnswer: e.target.value })} />
+                          </div>
+                        ) : (
+                          <div style={{ marginTop: 16 }}>
+                            <p className="field__label" style={{ marginBottom: 8 }}>
+                              Answer Options{' '}
+                              <span style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>
+                                {q.questionType === 'MULTIPLE_CHOICE'
+                                  ? '(check all correct answers)'
+                                  : '(select the one correct answer)'}
+                              </span>
+                            </p>
+                            {q.options.map((o, oIdx) => (
+                              <div key={oIdx} className="exam-option-row">
+                                {q.questionType === 'MULTIPLE_CHOICE' ? (
+                                  <input type="checkbox" checked={o.correct}
+                                    onChange={() => toggleCorrectMulti(qIdx, oIdx)} />
+                                ) : (
+                                  <input type="radio" name={`correct-${qIdx}`} checked={o.correct}
+                                    onChange={() => setCorrectOption(qIdx, oIdx)} />
+                                )}
+                                <input className="field__input" type="text" value={o.content}
+                                  placeholder={`Option ${oIdx + 1}`}
+                                  onChange={(e) => updateOptionDraft(qIdx, oIdx, { content: e.target.value })} />
+                                {q.options.length > 2 && (
+                                  <button type="button" className="btn btn--danger-ghost btn--sm"
+                                    onClick={() => removeOption(qIdx, oIdx)}>✕</button>
+                                )}
+                              </div>
+                            ))}
+                            {q.options.length < 6 && (
+                              <button type="button" className="btn btn--ghost btn--sm" style={{ marginTop: 8 }}
+                                onClick={() => addOption(qIdx)}>+ Add option</button>
+                            )}
+                          </div>
+                        )}
 
                         <div className="post-form-actions" style={{ marginTop: 16 }}>
                           <button className="btn btn--primary btn--sm" onClick={() => handleSaveQuestion(qIdx)}>Save question</button>

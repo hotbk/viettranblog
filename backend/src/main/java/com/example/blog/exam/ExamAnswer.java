@@ -28,6 +28,9 @@ public class ExamAnswer {
     )
     private List<QuestionOption> selectedOptions = new ArrayList<>();
 
+    @Column(columnDefinition = "TEXT")
+    private String textAnswer;
+
     private Boolean correct;
 
     public Long getId() { return id; }
@@ -37,6 +40,8 @@ public class ExamAnswer {
     public void setQuestion(Question question) { this.question = question; }
     public List<QuestionOption> getSelectedOptions() { return selectedOptions; }
     public void setSelectedOptions(List<QuestionOption> selectedOptions) { this.selectedOptions = selectedOptions; }
+    public String getTextAnswer() { return textAnswer; }
+    public void setTextAnswer(String textAnswer) { this.textAnswer = textAnswer; }
     public Boolean getCorrect() { return correct; }
     public void setCorrect(Boolean correct) { this.correct = correct; }
 }

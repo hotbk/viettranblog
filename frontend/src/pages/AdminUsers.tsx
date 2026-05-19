@@ -33,7 +33,7 @@ const ROLE_BADGE: Record<Role, string> = {
   MEMBER: 'badge--draft',
 };
 
-const EMPTY_FORM: CreateUserRequest = { username: '', email: '', password: '', role: 'READER' };
+const EMPTY_FORM: CreateUserRequest = { username: '', email: '', password: '', role: 'MEMBER' };
 
 export default function AdminUsers() {
   const navigate = useNavigate();
@@ -241,6 +241,7 @@ export default function AdminUsers() {
                     value={form.role}
                     onChange={(e) => setForm({ ...form, role: e.target.value as Role })}
                   >
+                    <option value="MEMBER">Member</option>
                     <option value="READER">Reader</option>
                     <option value="EDITOR">Editor</option>
                     <option value="ADMIN">Admin</option>
@@ -321,6 +322,7 @@ export default function AdminUsers() {
                           onChange={(e) => handleRoleChange(user, e.target.value as Role)}
                           title="Change role"
                         >
+                          <option value="MEMBER">Member</option>
                           <option value="READER">Reader</option>
                           <option value="EDITOR">Editor</option>
                           <option value="ADMIN">Admin</option>

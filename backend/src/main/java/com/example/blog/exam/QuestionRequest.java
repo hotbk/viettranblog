@@ -7,5 +7,6 @@ public record QuestionRequest(
         int orderIndex,
         int points,
         String questionType,
-        List<OptionRequest> options
+        List<OptionRequest> options,
+        String correctTextAnswer
 ) {}
