@@ -422,3 +422,29 @@ Decisions / notes:
 Follow-ups / known gaps:
 - Add a `MEMBER`-role test account (or a scripted setup/teardown) if member/exam flows need functional verification later.
 - Consider adding backend `@SpringBootTest` coverage for the comment-delete endpoint's authz if it isn't already covered (not checked in this pass — this was a live smoke test, not a source review).
+
+### 2026-08-07 — Closed the two remaining gaps: member/exam flow + frontend visual smoke test
+
+Summary: Followed up on the two open items from the smoke test above.
+
+**1. `/api/member/**` (exam) flow — full functional pass, 14/14 checks passed.** Created a temporary `MEMBER`-role user and a temporary exam (1 single-choice question, 2 options) via the admin API, then exercised the whole member journey and cleaned everything up afterward:
+- `POST /api/admin/users` (role MEMBER) → 201; `POST /api/admin/exams` (PUBLISHED) → 201; `POST /api/admin/exams/{id}/questions` → 201.
+- Member login (`POST /api/auth/login`) → 200, JWT with `role:MEMBER`.
+- `GET /api/member/exams` without token → 401; with MEMBER token → 200; **with ADMIN token → 403** (confirms `hasRole("MEMBER")` doesn't fall through for ADMIN — role checks are exact-match, not hierarchical).
+- `GET /api/member/exams/{id}` → 200, question options returned **without** the `correct` field (no answer leakage to the client).
+- `POST /api/member/exams/{id}/attempts` → 201 (attempt `IN_PROGRESS`).
+- `POST /api/member/attempts/{id}/submit` with the correct option → 200, graded `score=10/10`, `passed=true`, `durationSeconds` computed correctly.
+- `GET /api/member/attempts` and `GET /api/member/attempts/{id}` → 200.
+- Cleanup: deleted `exam_answer_selected_options`/`exam_answers`/`exam_attempts` rows via SQL (no cascade path from `Exam`/`User` to `ExamAttempt` — `@ManyToOne` FK only, so the attempt row must be removed before the exam/user can go), then `DELETE /api/admin/exams/{id}` → 204 (cascaded to `questions`/`question_options` via JPA `CascadeType.ALL`, verified 0 rows left in both tables), then `DELETE /api/admin/users/{id}` → 204. Verified DB back to exactly the pre-test state (0 exams, 0 questions, 0 options, 0 attempts, 1 `ADMIN` user).
+
+**2. Frontend — manual visual smoke test (no automated suite added, per user's choice).** No `chromium-cli` available in this environment; installed Playwright + Chromium locally (`npm install playwright` + `npx playwright install chromium --with-deps`, in scratchpad only, not added to `frontend/package.json`) and drove the real production site:
+- `/`, `/admin/login`, `/series` all returned `200` with zero browser console errors; screenshots confirmed correct rendering including proper empty states ("No posts found", "No series yet") matching the currently-empty production content.
+- Full interactive login: filled the real admin login form, submitted, `POST /api/auth/login` → `200` via actual browser fetch, redirected to `/admin/posts`, which correctly listed the one pre-existing `DRAFT` post and no leftover test data. This is the exact scenario the user originally reported as broken (browser-based admin login) — now confirmed working end-to-end through a real browser, not just `curl`.
+
+Decisions:
+- Playwright was installed ad hoc in the scratchpad directory for this one-off visual check, not added as a project dependency — per the user's choice not to add automated frontend tests this round. If recurring visual/E2E checks are wanted later, formalize this into a project `run` skill (via `/run-skill-generator`) or a proper Playwright test suite in `frontend/`.
+- Confirmed role checks are exact-match (`hasRole("MEMBER")` rejects ADMIN tokens with 403), not hierarchical — worth keeping in mind if a future feature wants ADMIN to inherit MEMBER/EDITOR access; today it must be granted explicitly per matcher.
+
+Follow-ups / known gaps:
+- Both gaps from the prior entry are now closed for this round; no automated regression coverage was added for either (member/exam flow or frontend), so both would need to be re-verified manually again after future changes unless real test suites are added.
+- Consider a proper Playwright-based E2E suite in `frontend/` (or a `run` project skill) if visual regression checks are needed regularly, instead of ad hoc scratchpad installs each time.
