@@ -57,6 +57,16 @@ public class PostService {
     }
 
     @Transactional
+    public PostResponse updateStatus(Long id, PostStatus status) {
+        Post post = postRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("POST_NOT_FOUND", "Post not found"));
+        post.setStatus(status);
+        // saveAndFlush forces the @PreUpdate callback (which stamps publishedAt) to run
+        // before we read the entity back, so the response reflects it immediately.
+        return PostResponse.from(postRepository.saveAndFlush(post));
+    }
+
+    @Transactional
     public PostResponse update(Long id, PostRequest request, MultipartFile coverImage, boolean removeCoverImage) {
         Post post = postRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("POST_NOT_FOUND", "Post not found"));
@@ -70,7 +80,9 @@ public class PostService {
         } else if (coverImage != null && !coverImage.isEmpty()) {
             applyImage(post, coverImage);
         }
-        return PostResponse.from(postRepository.save(post));
+        // saveAndFlush forces the @PreUpdate callback (which stamps publishedAt) to run
+        // before we read the entity back, so the response reflects it immediately.
+        return PostResponse.from(postRepository.saveAndFlush(post));
     }
 
     @Transactional

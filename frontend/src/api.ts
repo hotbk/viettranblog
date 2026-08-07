@@ -136,6 +136,23 @@ export async function updatePost(
   return response.json();
 }
 
+export async function updatePostStatus(id: number, status: 'DRAFT' | 'PUBLISHED'): Promise<PostResponse> {
+  const response = await fetch(`${API_BASE_URL}/posts/${id}/status?status=${status}`, {
+    method: 'PUT',
+    headers: { ...authHeader() },
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    throw new UnauthorizedError();
+  }
+
+  if (!response.ok) {
+    throw new Error('Failed to update post status');
+  }
+
+  return response.json();
+}
+
 export async function deletePost(id: number): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/posts/${id}`, {
     method: 'DELETE',

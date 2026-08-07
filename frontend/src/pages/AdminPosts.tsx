@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { fetchAdminPosts, deletePost, UnauthorizedError } from '../api';
+import { fetchAdminPosts, deletePost, updatePostStatus, UnauthorizedError } from '../api';
 import { logout } from '../auth';
 import type { BlogPost } from '../types';
 import PostForm from './PostForm';
@@ -41,6 +41,7 @@ export default function AdminPosts() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [statusUpdatingIds, setStatusUpdatingIds] = useState<Set<number>>(new Set());
   const [panel, setPanel] = useState<PanelMode>('none');
   const [refreshKey, setRefreshKey] = useState(0);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -148,6 +149,41 @@ export default function AdminPosts() {
       const msg = err instanceof Error ? err.message : 'Failed to delete post';
       setDeleteError(msg);
       showToast(msg, 'error');
+    }
+  }
+
+  async function handleToggleStatus(post: BlogPost) {
+    if (statusUpdatingIds.has(post.id)) return;
+    const previousStatus = post.status;
+    const nextStatus = previousStatus === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED';
+
+    setStatusUpdatingIds((prev) => new Set(prev).add(post.id));
+    // Optimistic update
+    setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, status: nextStatus } : p)));
+
+    try {
+      const updated = await updatePostStatus(post.id, nextStatus);
+      setPosts((prev) => prev.map((p) => (p.id === post.id ? updated : p)));
+      showToast(
+        nextStatus === 'PUBLISHED' ? `"${post.title}" published.` : `"${post.title}" moved to draft.`,
+        'success',
+      );
+    } catch (err) {
+      // Rollback
+      setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, status: previousStatus } : p)));
+      if (err instanceof UnauthorizedError) {
+        logout();
+        navigate('/admin/login');
+        return;
+      }
+      const msg = err instanceof Error ? err.message : 'Failed to update post status';
+      showToast(msg, 'error');
+    } finally {
+      setStatusUpdatingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(post.id);
+        return next;
+      });
     }
   }
 
@@ -344,7 +380,22 @@ export default function AdminPosts() {
                       </td>
                       <td>{post.category || <span style={{ color: 'var(--color-text-light)' }}>—</span>}</td>
                       <td>
-                        <StatusBadge status={post.status} />
+                        <div className="row-status-toggle">
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={post.status === 'PUBLISHED'}
+                            aria-label={
+                              post.status === 'PUBLISHED'
+                                ? `Unpublish "${post.title}"`
+                                : `Publish "${post.title}"`
+                            }
+                            className={`row-status-toggle__switch${post.status === 'PUBLISHED' ? ' row-status-toggle__switch--on' : ''}`}
+                            onClick={() => handleToggleStatus(post)}
+                            disabled={statusUpdatingIds.has(post.id)}
+                          />
+                          <StatusBadge status={post.status} />
+                        </div>
                       </td>
                       <td style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>
                         {formatDate(post.publishedAt)}

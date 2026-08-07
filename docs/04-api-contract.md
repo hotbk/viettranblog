@@ -96,7 +96,21 @@ Request:
 
 Same request body as create.
 
-## 6. Delete Post
+## 6. Update Post Status
+
+### PUT `/posts/{id}/status`
+
+Query parameters:
+
+| Name | Type | Required | Description |
+|---|---|---:|---|
+| status | string (`DRAFT` \| `PUBLISHED`) | yes | New status for the post |
+
+Used by the admin posts grid to toggle a post between draft and published without resubmitting the full post form. Requires `ADMIN` or `EDITOR` role, same as other post write endpoints.
+
+Response: updated post, same shape as [Get Post By Slug](#3-get-post-by-slug).
+
+## 7. Delete Post
 
 ### DELETE `/posts/{id}`
 
