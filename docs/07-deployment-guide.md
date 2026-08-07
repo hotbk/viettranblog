@@ -52,12 +52,14 @@ docker compose ps
 
 ```bash
 cd backend
-mvn spring-boot:run
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
 Backend sẽ khởi động tại `http://localhost:18080`.
 
-Lần đầu chạy, hệ thống tự seed dữ liệu mẫu:
+> **Lưu ý:** Cờ `-Dspring-boot.run.profiles=dev` (hoặc biến môi trường `SPRING_PROFILES_ACTIVE=dev`) là **bắt buộc** nếu muốn có dữ liệu mẫu. `DataSeeder` chỉ chạy khi profile `dev` được kích hoạt tường minh — mặc định (không truyền profile) hoặc profile production sẽ **không** seed dữ liệu, để tránh lộ dữ liệu/tài khoản mẫu ra môi trường thật.
+
+Lần đầu chạy với profile `dev`, hệ thống tự seed dữ liệu mẫu:
 - User admin: `admin` / `Admin@2024!`
 - 4 bài viết mẫu (3 PUBLISHED, 1 DRAFT)
 - 5 comment mẫu
@@ -116,12 +118,20 @@ Các giá trị mặc định dùng cho development. Production phải override 
 | `SPRING_DATASOURCE_PASSWORD` | `blog_password` | Password PostgreSQL |
 | `JWT_SECRET` | `dev-secret-do-not-use-in-production-32chars` | Secret key ký JWT — **bắt buộc đổi trên production** |
 
+> **Fail-fast bảo vệ JWT_SECRET:** Nếu ứng dụng khởi động với profile khác `dev`/`test` (ví dụ mặc định hoặc `prod`) mà `JWT_SECRET` vẫn còn giá trị mặc định `dev-secret-do-not-use-in-production-32chars`, backend sẽ **báo lỗi và dừng khởi động ngay lập tức** thay vì chạy với secret không an toàn. Đây là lớp bảo vệ bổ sung (defense-in-depth) phòng trường hợp quên set `JWT_SECRET` khi deploy.
+
 Ví dụ chạy với biến môi trường:
 
 ```bash
 JWT_SECRET=my-super-secret-32-chars-minimum \
 SPRING_DATASOURCE_URL=jdbc:postgresql://db-host:5432/personal_blog \
 mvn spring-boot:run
+```
+
+Ở môi trường development, nếu muốn có dữ liệu mẫu, dùng thêm profile `dev` (xem mục 2.3):
+
+```bash
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
 ### 3.2 Frontend (`frontend/.env`)
@@ -172,6 +182,34 @@ SPRING_DATASOURCE_USERNAME=<user> \
 SPRING_DATASOURCE_PASSWORD=<password> \
 java -jar target/personal-blog-backend-0.1.0.jar
 ```
+
+### 4.0 Deployment thực tế hiện tại
+
+Instance production đầu tiên đang chạy tại **`https://blog.datxesocson.vn`** (server dùng chung với các dịch vụ khác — n8n, nocodb — nên mọi thao tác trên server đó chỉ được phép chạm vào các resource liên quan tới app này, xem chi tiết trong `docs/06-project-memory.md`, mục "First production deployment"). Cấu hình thực tế có vài khác biệt so với ví dụ ở mục 4.3/4.4 bên dưới:
+
+- Backend chạy dưới user hệ thống không đặc quyền `blog` (không phải `www-data` hay `root`), qua systemd unit `viettranblog-backend.service`, đọc secrets từ `/etc/viettranblog/backend.env` (root:root, mode 600).
+- Frontend build (`frontend/dist`) được copy sang `/var/www/viettranblog/dist` để nginx (chạy dưới `www-data`) có quyền đọc.
+- PostgreSQL chạy trong container Docker riêng `personal-blog-postgres` (image `postgres:16-alpine`, volume đặt tên `personal-blog-postgres-data`, publish ra `127.0.0.1:5432` — không dùng chung container Postgres của các app khác trên server).
+- nginx site riêng `/etc/nginx/sites-available/blog.datxesocson.vn`, SSL qua `certbot --nginx -d blog.datxesocson.vn`.
+
+### 4.0.1 Bootstrap admin đầu tiên (khoảng trống hiện tại — cần lưu ý)
+
+**Hiện tại repo chưa có API tạo admin đầu tiên hoặc reset mật khẩu.** `DataSeeder` (tạo user `admin` mẫu) chỉ chạy khi kích hoạt tường minh profile `dev` (xem mục 2.3) — **không được** dùng profile này ở production vì nó sẽ tạo tài khoản với mật khẩu đã biết trước. Vì `/api/admin/**` yêu cầu đã có sẵn một user `ADMIN`, và không có endpoint tự đăng ký, quy trình hiện tại để tạo admin đầu tiên trên production là **insert thủ công vào database**:
+
+1. Sinh mật khẩu ngẫu nhiên mạnh cho tài khoản admin.
+2. Sinh BCrypt hash tương thích với `BCryptPasswordEncoder()` mặc định của Spring Security (strength 10, prefix `$2a$`/`$2b$`/`$2y$` đều được Spring chấp nhận). Có thể dùng một file Java tạm biên dịch với `spring-security-crypto` lấy từ `~/.m2` (build classpath bằng `mvn dependency:build-classpath`), chạy xong thì **xoá file tạm**, không commit vào repo.
+3. Insert trực tiếp vào bảng `users` (cột: `username`, `email`, `password` — chứa BCrypt hash, `role` — `ADMIN`/`EDITOR`/`READER`/`MEMBER`, `created_at`):
+
+   ```bash
+   docker exec personal-blog-postgres psql -U blog_user -d personal_blog -c \
+     "INSERT INTO users (username, email, password, role, created_at) \
+      VALUES ('admin', 'admin@example.com', '<bcrypt-hash>', 'ADMIN', now());"
+   ```
+
+4. Kiểm tra bằng cách đăng nhập: `curl -X POST https://<domain>/api/auth/login -d '{"username":"admin","password":"<mật-khẩu>"}'`.
+5. Ghi lại mật khẩu này ở nơi an toàn ngay lập tức — **không có tính năng quên mật khẩu**, nếu mất sẽ phải lặp lại quy trình insert thủ công (update lại cột `password` bằng hash mới).
+
+**Follow-up đề xuất:** xây dựng một cơ chế bootstrap admin chính thức (CLI command hoặc endpoint one-time-setup có khoá) và tính năng reset mật khẩu, để không phải thao tác SQL thủ công mỗi lần.
 
 ### 4.3 Cấu hình Nginx (ví dụ)
 
@@ -240,6 +278,7 @@ sudo systemctl start viettranblog
 - [ ] HTTPS được bật (Let's Encrypt với Certbot)
 - [ ] Cổng 18080 không exposed ra ngoài (chỉ Nginx proxy)
 - [ ] Backup database định kỳ (xem phần 5.3)
+- [ ] **Không** truyền profile `dev` (`SPRING_PROFILES_ACTIVE`/`-Dspring-boot.run.profiles`) khi chạy production — profile `dev` sẽ kích hoạt `DataSeeder` và tạo tài khoản/dữ liệu mẫu không mong muốn
 
 ---
 
@@ -252,7 +291,7 @@ sudo systemctl start viettranblog
 ```bash
 # Khởi động tất cả
 docker compose up -d postgres
-cd backend && mvn spring-boot:run &
+cd backend && mvn spring-boot:run -Dspring-boot.run.profiles=dev &
 cd frontend && npm run dev &
 
 # Dừng database

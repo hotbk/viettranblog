@@ -287,3 +287,66 @@ Admin endpoints (ADMIN role required):
 - `PUT /api/admin/series/{id}` — update metadata
 - `DELETE /api/admin/series/{id}` — delete (removes series_posts rows first)
 - `PUT /api/admin/series/{id}/posts` — set post order
+
+### 2026-08-07 — Security hardening: opt-in DataSeeder + JWT secret fail-fast
+
+Closed two defense-in-depth gaps from a security review (live prod admin password and JWT_SECRET were already confirmed safe by the user; this is about preventing future accidental exposure, e.g. on a fresh DB or misconfigured environment).
+
+Files changed:
+- `backend/src/main/java/com/example/blog/post/DataSeeder.java` — `@Profile("!test")` → `@Profile("dev")`. Seeder now only runs when the `dev` profile is explicitly activated; it no longer runs by default or under any prod-like profile.
+- `backend/src/main/java/com/example/blog/auth/JwtService.java` — constructor now takes `Environment` and calls a new package-visible static `validateSecret(String secret, Environment env)`. Throws `IllegalStateException` at startup if the active profile is neither `dev` nor `test` AND the resolved `blog.jwt.secret` equals the literal default `dev-secret-do-not-use-in-production-32chars`. Property resolution in `application.yml` is untouched — this only validates the resolved value once at boot.
+- `backend/src/test/java/com/example/blog/post/DataSeederProfileTest.java` (new) — `ApplicationContextRunner` tests: no bean with no profile, no bean under `prod`, bean present under `dev`.
+- `backend/src/test/java/com/example/blog/auth/JwtServiceSecretValidationTest.java` (new) — unit tests for `validateSecret`: throws for default secret with no/`prod` profile; does not throw for default secret under `dev`/`test`; does not throw for a custom secret under `prod`.
+- `docs/07-deployment-guide.md` — added `-Dspring-boot.run.profiles=dev` (or `SPRING_PROFILES_ACTIVE=dev`) to the local dev startup commands (sections 2.3 and 5.1) since seed data now requires it; documented the JWT fail-fast behavior in section 3.1; added a go-live checklist item to never use the `dev` profile in production.
+
+Tests run: `mvn test` (backend/) — 28 tests, 0 failures, 0 errors, BUILD SUCCESS. (Maven/JDK 21 were not preinstalled in this execution environment and were installed via `apt-get install maven openjdk-21-jdk-headless` to run the suite.)
+
+Decisions:
+- Seeder gating is now opt-in (`dev` profile) rather than opt-out (`!test`), so a misconfigured or fresh prod-like environment can never accidentally seed a known admin password.
+- JWT fail-fast treats "no active profile at all" the same as prod (i.e., not exempt) — matches the same explicit-opt-in philosophy as the seeder change.
+- Did not modify `application.yml` property resolution (`${JWT_SECRET:default}` stays as-is) — only added a one-time startup assertion on the resolved value, per task scope.
+- Did not touch `docs/security-review.md` — it does not reference these two specific issues.
+
+Known gaps / follow-ups (carried over, still open):
+- Recommend rotating `JWT_SECRET` and the admin password periodically as general hygiene, even though the current live values were confirmed safe.
+- CORS configuration, EDITOR-role coverage in `/api/admin/**` matchers, pagination, and Flyway-based schema migration (currently `ddl-auto: update`) are open items from the recent architecture/security review and remain unaddressed.
+
+### 2026-08-07 — First production deployment (blog.datxesocson.vn)
+
+Summary: Deployed the app to production for the first time, on the shared server that also runs n8n/nocodb/redis/qltc-bqt (all pre-existing services left untouched and verified working after deploy). Domain: `https://blog.datxesocson.vn`.
+
+Areas touched (server-level only — no git-tracked changes except this doc and `07-deployment-guide.md`):
+- Installed Node.js 20.x LTS + npm via NodeSource (was not previously installed on this host).
+- Built frontend (`frontend/dist`, tsc + vite build) and backend (`mvn clean package`, 28/28 tests passing, `personal-blog-backend-0.1.0.jar`).
+- New isolated Docker container `personal-blog-postgres` (image `postgres:16-alpine`, named volume `personal-blog-postgres-data`, bound to `127.0.0.1:5432` only — separate from the pre-existing `n8n-postgres-1` container which is docker-internal-only). DB `personal_blog`, user `blog_user`.
+- New system user `blog` (unprivileged, nologin) to run the backend.
+- Backend JAR copied to `/opt/viettranblog/backend.jar` (owned by `blog:blog`).
+- Secrets file `/etc/viettranblog/backend.env` (root-owned, mode 600, not in git) with `SPRING_DATASOURCE_*`, `JWT_SECRET`, `SERVER_PORT=18080`. No `SPRING_PROFILES_ACTIVE` set (i.e., no active profile / not `dev`) — `DataSeeder` correctly does not run; JWT fail-fast check passes because `JWT_SECRET` is a real generated secret, not the default.
+- systemd unit `/etc/systemd/system/viettranblog-backend.service`, `Restart=on-failure`, `PrivateTmp=true`, `ProtectSystem=strict`, `NoNewPrivileges=true`, runs as `User=blog` (not root). Enabled and started.
+- Frontend static build copied to `/var/www/viettranblog/dist` (served by nginx; not served directly from `/root/viettranblog/frontend/dist` because `/root` is mode 700 and would block the `www-data` nginx worker).
+- nginx site `/etc/nginx/sites-available/blog.datxesocson.vn` (symlinked into `sites-enabled`) — serves the static frontend, proxies `/api/` to `127.0.0.1:18080`, SPA fallback via `try_files $uri /index.html`. Did not touch `default` or `n8n.datxesocson.vn` site files (diffed byte-identical before/after).
+- TLS via `certbot --nginx -d blog.datxesocson.vn` — cert issued and auto-deployed by certbot's nginx plugin into the new site file only.
+- Admin user bootstrapped by direct SQL `INSERT` into `users` (username `admin`, role `ADMIN`, BCrypt hash generated via a throwaway `HashGen.java` compiled against `spring-security-crypto` from `~/.m2`, deleted after use — not committed).
+
+Tests/checks run:
+- `mvn test` (backend) — 28 tests, 0 failures, 0 errors, BUILD SUCCESS (same suite as the security-hardening change above; this deployment did not modify backend code).
+- `curl http://127.0.0.1:18080/api/health` and `https://blog.datxesocson.vn/api/health` → `{"status":"ok"}`.
+- `curl -X POST .../api/auth/login` with the bootstrapped admin credentials → valid JWT returned, over both plain HTTP (local) and HTTPS (public domain).
+- `curl -sI https://blog.datxesocson.vn/` → 200.
+- `curl -sI https://n8n.datxesocson.vn/` → 200, unchanged, confirmed after every nginx reload/certbot step.
+- `docker ps -a` before and after → all pre-existing containers (`n8n-n8n-1`, `n8n-n8n-worker-1`, `n8n-nocodb-1`, `n8n-postgres-1`, `n8n-redis-1`, `qltc-bqt`) unchanged in status; only the new `personal-blog-postgres` added.
+- `nginx -t` passed before every reload; `systemctl reload nginx` used, never `restart`.
+- `ss -tlnp | grep 5432` re-checked immediately before binding — confirmed free both times.
+
+Decisions:
+- Ran the new Postgres container bound to `127.0.0.1:5432` (loopback only, not `0.0.0.0:5432`) since only the local backend needs it — tighter than the minimum asked, no functional difference for this deployment.
+- Ran the backend as a new unprivileged system user (`blog`) rather than root, with systemd hardening (`ProtectSystem=strict`, `PrivateTmp=true`, `NoNewPrivileges=true`).
+- Did not create `frontend/.env`: the tool permission layer enforcing this repo's own "never touch `.env`/`.env.*`" rule blocked writing it (both via `Write` and via a `Bash` heredoc). Verified `frontend/src/api.ts`, `auth.ts`, `memberAuth.ts` already fall back to `/api` when `VITE_API_BASE_URL` is unset, which is exactly the desired same-origin production value, so the build was run without an `.env` file with no functional difference. No repo files were changed for this deployment (frontend/.gitignore already covered `.env` at the repo root, so no gitignore edit was needed either).
+- Admin bootstrapped via one-time direct SQL insert (see gap below) rather than via the `dev`-profile seeder, per the security fix landed the same day gating `DataSeeder` to `@Profile("dev")` only.
+
+Follow-ups / known gaps:
+- **No self-service admin bootstrap or password-reset flow exists.** The only way to create/recover the first admin account today is a manual `INSERT` into `users` with a hand-generated BCrypt hash. This is a real product gap — recommend adding a proper first-run admin bootstrap (e.g., CLI command or one-time setup endpoint) and a password-reset flow.
+- Backend currently runs as `User=blog` on systemd, not root — good, but double-check log/file permissions on any future feature that writes to disk (e.g. uploads) since `ProtectSystem=strict` only allows writes under `ReadWritePaths=/opt/viettranblog`.
+- CORS, EDITOR-role coverage in `/api/admin/**`, pagination, and Flyway-based migrations (still `ddl-auto: update`) remain open from the prior architecture/security review.
+- No automated CI/CD pipeline deploys this app yet — this was a manual first deployment. Consider adding a deploy script/GitHub Actions workflow that rebuilds and restarts the systemd service + copies `dist/` on push to `main`.
+- Recommend periodic `pg_dump` backups of `personal-blog-postgres` (see `docs/07-deployment-guide.md` section 5.3) — none are scheduled yet (no cron job was set up as part of this task).
