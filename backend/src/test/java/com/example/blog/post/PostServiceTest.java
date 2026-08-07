@@ -43,4 +43,24 @@ class PostServiceTest {
         assertThat(result).extracting(PostResponse::slug).contains("published-test");
         assertThat(result).extracting(PostResponse::slug).doesNotContain("draft-test");
     }
+
+    @Test
+    void updateStatusTogglesBetweenDraftAndPublished() {
+        PostResponse created = postService.create(new PostRequest(
+                "Toggle Test",
+                "toggle-test",
+                "Toggle excerpt",
+                "Toggle content",
+                "Test",
+                List.of("toggle"),
+                PostStatus.DRAFT
+        ), null);
+
+        PostResponse published = postService.updateStatus(created.id(), PostStatus.PUBLISHED);
+        assertThat(published.status()).isEqualTo(PostStatus.PUBLISHED);
+        assertThat(published.publishedAt()).isNotNull();
+
+        PostResponse backToDraft = postService.updateStatus(created.id(), PostStatus.DRAFT);
+        assertThat(backToDraft.status()).isEqualTo(PostStatus.DRAFT);
+    }
 }

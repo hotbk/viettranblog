@@ -72,6 +72,11 @@ public class PostController {
         return postService.update(id, request, coverImage, removeCoverImage);
     }
 
+    @PutMapping("/{id}/status")
+    public PostResponse updateStatus(@PathVariable Long id, @RequestParam PostStatus status) {
+        return postService.updateStatus(id, status);
+    }
+
     @GetMapping("/{id}/cover-image")
     public ResponseEntity<byte[]> getCoverImage(@PathVariable Long id) {
         Post post = postService.getCoverImagePost(id);
