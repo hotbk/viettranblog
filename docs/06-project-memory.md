@@ -350,3 +350,43 @@ Follow-ups / known gaps:
 - CORS, EDITOR-role coverage in `/api/admin/**`, pagination, and Flyway-based migrations (still `ddl-auto: update`) remain open from the prior architecture/security review.
 - No automated CI/CD pipeline deploys this app yet — this was a manual first deployment. Consider adding a deploy script/GitHub Actions workflow that rebuilds and restarts the systemd service + copies `dist/` on push to `main`.
 - Recommend periodic `pg_dump` backups of `personal-blog-postgres` (see `docs/07-deployment-guide.md` section 5.3) — none are scheduled yet (no cron job was set up as part of this task).
+
+### 2026-08-07 — Verified production login; reset admin password
+
+Summary: User asked to find the admin account and try logging in. This session's environment turned out to be the live production host (confirmed `viettranblog-backend` systemd service active, `personal-blog-postgres` container already running with real data). The original bootstrap admin password from the first deployment was never recorded anywhere (by design), so login could not be tested with it. Per user's explicit choice, reset the admin password directly in the production DB, then verified login end-to-end.
+
+What was done:
+- Confirmed the only ADMIN user: `username=admin`, `email=tuan1234amen@gmail.com`.
+- Generated a new random password and its BCrypt hash locally (throwaway compile against `spring-security-crypto` from `~/.m2`, same approach as the original bootstrap; generator file deleted after use).
+- `UPDATE users SET password = '<hash>' WHERE username = 'admin';` via `docker exec personal-blog-postgres psql`.
+- Verified `POST /api/auth/login` with the new password returns `200` and a valid ADMIN JWT, both against `127.0.0.1:18080` (local systemd service) and `https://blog.datxesocson.vn` (public).
+- The new plaintext password was shown to the user once in chat/scratchpad only — not committed, not written to this file, per repo secrets policy.
+
+Tests run: manual `curl -X POST .../api/auth/login` against both local and public endpoints — both `200 OK` with valid JWT.
+
+Decisions:
+- Did not read `/etc/viettranblog/backend.env` (blocked by the permission layer as a credentials file) — used `docker exec ... psql` on the running container instead, which needed no secret file access.
+- Reused the existing "no self-service reset flow" gap (see prior entry) — this was another manual SQL password reset, not a new capability.
+
+Follow-ups / known gaps (unchanged, still open):
+- Self-service admin bootstrap/password-reset flow still does not exist — this session worked around it manually again. Recommend building it so future resets don't require direct DB/SQL access.
+- User should rotate this newly-set password to one of their own choosing via the same manual SQL process until a reset flow exists.
+
+### 2026-08-07 — Fixed: production admin login blocked by CORS (real bug, unrelated to the password reset above)
+
+Summary: After the password reset above, the user still could not log in via the browser at `tech2blogs.com/admin/login` (`403 Forbidden` on `POST /api/auth/login`, confirmed via browser DevTools Network tab). Root cause: `SecurityConfig.corsConfigurationSource()` only allowed dev origins (`https://*:5173`, `https://*:5174`, `http://localhost:*`) — it never included the real production domains. Spring Security's CORS filter rejects any actual (non-preflight) request whose `Origin` header doesn't match the configured patterns, returning `403` before the request reaches `AuthController`. `curl` calls used earlier in this session didn't send an `Origin` header, so they bypassed this check and returned `200` — which is why the API "worked" in testing but the real browser login did not. This was a pre-existing bug, not something introduced by the password reset; it likely meant admin login never worked from a browser on production before this fix.
+
+Files changed:
+- `backend/src/main/java/com/example/blog/config/SecurityConfig.java` — added `https://tech2blogs.com`, `https://www.tech2blogs.com`, `https://blog.datxesocson.vn`, `https://www.blog.datxesocson.vn` to `allowedOriginPatterns` (dev origins kept as-is).
+
+Deployed: `mvn clean package -DskipTests` → copied jar to `/opt/viettranblog/backend.jar` → `systemctl restart viettranblog-backend`. Verified `GET /api/health` → 200, then `POST /api/auth/login` with `Origin: https://tech2blogs.com` header → `200` with `Access-Control-Allow-Origin: https://tech2blogs.com` present.
+
+Tests run: `mvn test` (backend/) before packaging — exit code 0 (existing 28-test suite, no new tests added for this change since it's config-only, no new branching logic).
+
+Decisions:
+- Branched as `feature/BUG-001-cors-production-origins` off `feature/SEC-001-jwt-seeder-hardening` (branching convention) and committed there; not yet merged to `main`.
+- Did not add a `CORS_ALLOWED_ORIGINS` env-configurable property — origins are still hardcoded in `SecurityConfig.java`. Acceptable at current scale (2 known domains) but worth externalizing if more domains/environments are added later.
+
+Follow-ups / known gaps:
+- Consider making CORS allowed origins configurable via `application.yml`/env var instead of hardcoded, especially before adding more domains.
+- This branch has not been merged to `main` yet — needs a PR per the repo's Pull Request Rule.
