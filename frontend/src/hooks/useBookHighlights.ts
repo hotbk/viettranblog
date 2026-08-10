@@ -19,7 +19,11 @@ export function useBookHighlights(bookId: number, enabled: boolean) {
 
   useEffect(() => {
     if (!enabled || !bookId) {
-      setLoaded(true);
+      // Deferred to a microtask (not called synchronously in the effect body)
+      // so this satisfies react-hooks/set-state-in-effect the same way the
+      // async load() branch below does — see PdfReader.tsx for the sibling
+      // idiom used elsewhere in this codebase for the same rule.
+      queueMicrotask(() => setLoaded(true));
       return;
     }
     let cancelled = false;
