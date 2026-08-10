@@ -20,6 +20,9 @@ backend/target/
 # Database data (bind mount)
 data/
 
+# Database backups (pg_dump output, never commit real user data)
+backups/
+
 # IDE
 .idea/
 .vscode/
