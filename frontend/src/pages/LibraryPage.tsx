@@ -6,8 +6,10 @@ import { isAuthenticated } from '../auth';
 import { isMemberAuthenticated } from '../memberAuth';
 import NavBrand from '../components/NavBrand';
 import ThemeToggle from '../components/ThemeToggle';
+import LanguageToggle from '../components/LanguageToggle';
 import NavUser from '../components/NavUser';
 import { useSeo } from '../useSeo';
+import { getLanguagePreference, languageQueryParam, setLanguagePreference, type LanguagePreference } from '../contentLanguage';
 
 const FILE_TYPE_LABEL: Record<string, string> = { PDF: 'PDF', TXT: 'Text' };
 
@@ -38,6 +40,7 @@ export default function LibraryPage() {
   const [category, setCategory] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [languagePref, setLanguagePref] = useState<LanguagePreference>(() => getLanguagePreference());
 
   const [continueBooks, setContinueBooks] = useState<Book[]>([]);
   const loggedIn = isAuthenticated() || isMemberAuthenticated();
@@ -50,7 +53,7 @@ export default function LibraryPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchBooks({ q: query, category });
+      const data = await fetchBooks({ q: query, category, language: languageQueryParam(languagePref) });
       setBooks(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unexpected error');
@@ -63,7 +66,12 @@ export default function LibraryPage() {
     const timer = window.setTimeout(load, 250);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, category]);
+  }, [query, category, languagePref]);
+
+  function handleShowAllLanguages() {
+    setLanguagePreference('ALL');
+    setLanguagePref('ALL');
+  }
 
   useEffect(() => {
     if (!loggedIn) return;
@@ -86,6 +94,7 @@ export default function LibraryPage() {
             <Link to="/library" className="site-nav__link site-nav__link--active">Library</Link>
             {loggedIn && <Link to="/library/highlights" className="site-nav__link">My Highlights</Link>}
             <Link to="/about" className="site-nav__link">About</Link>
+            <LanguageToggle onChange={setLanguagePref} />
             <ThemeToggle />
             <NavUser />
           </div>
@@ -160,10 +169,23 @@ export default function LibraryPage() {
           {!loading && !error && books.length === 0 && (
             <div className="empty-state">
               <div className="empty-state__icon">&#128218;</div>
-              <p className="empty-state__title">No books in the library yet.</p>
-              <p className="empty-state__desc">
-                {query || category ? 'Try a different search term or category.' : 'Check back soon.'}
+              <p className="empty-state__title">
+                {languagePref === 'ALL'
+                  ? 'No books in the library yet.'
+                  : `No ${languagePref === 'VI' ? 'Vietnamese' : 'English'} books yet.`}
               </p>
+              <p className="empty-state__desc">
+                {query || category
+                  ? 'Try a different search term or category.'
+                  : languagePref === 'ALL'
+                    ? 'Check back soon.'
+                    : 'This book may only exist in the other language so far.'}
+              </p>
+              {languagePref !== 'ALL' && (
+                <button className="btn btn--ghost" onClick={handleShowAllLanguages} style={{ marginTop: 16 }}>
+                  Show all languages
+                </button>
+              )}
             </div>
           )}
 

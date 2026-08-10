@@ -4,11 +4,13 @@ import {
   createBook, updateBook, fetchAdminBookById, UnauthorizedError,
   fetchAccessGroups, fetchAdminUsers, fetchBookAccessGroups, fetchBookAccessUsers,
   setBookAccessGroups as apiSetBookAccessGroups, setBookAccessUsers as apiSetBookAccessUsers,
+  linkBookTranslation, markBookTranslationReviewed,
 } from '../api';
 import { logout } from '../auth';
 import ThemeToggle from '../components/ThemeToggle';
+import TranslationsPanel from '../components/TranslationsPanel';
 import { Link } from 'react-router-dom';
-import type { Book, BookFileType, BookVisibility, AccessGroup, UserBrief } from '../types';
+import type { Book, BookFileType, BookVisibility, AccessGroup, UserBrief, ContentLanguage } from '../types';
 
 const ALLOWED_BOOK_TYPES: Record<string, BookFileType> = {
   'application/pdf': 'PDF',
@@ -41,6 +43,7 @@ export default function AdminBookForm() {
   const [visibility, setVisibility] = useState<BookVisibility>('PUBLIC');
   const [metadataVisibility, setMetadataVisibility] = useState<'PUBLIC_METADATA' | 'AUTHORIZED_ONLY'>('PUBLIC_METADATA');
   const [downloadable, setDownloadable] = useState(true);
+  const [language, setLanguage] = useState<ContentLanguage>('VI');
 
   const [bookFile, setBookFile] = useState<File | null>(null);
   const [bookFileError, setBookFileError] = useState<string | null>(null);
@@ -78,6 +81,7 @@ export default function AdminBookForm() {
         setVisibility(book.visibility);
         setMetadataVisibility(book.metadataVisibility ?? 'PUBLIC_METADATA');
         setDownloadable(book.downloadable);
+        setLanguage(book.language);
       })
       .catch((err) => {
         if (err instanceof UnauthorizedError) { handleAuthError(); return; }
@@ -164,7 +168,7 @@ export default function AdminBookForm() {
       const payload = {
         title, slug: slug.trim(), author: author.trim() || undefined,
         description: description.trim() || undefined, category: category.trim() || undefined,
-        status, visibility, metadataVisibility, downloadable,
+        status, visibility, metadataVisibility, downloadable, language,
       };
 
       let saved: Book;
@@ -424,6 +428,30 @@ export default function AdminBookForm() {
                   </div>
                 </div>
               )}
+
+              <p className="field field--full" style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '-8px 0 0' }}>
+                Visibility and access apply to all language versions of this book.
+              </p>
+
+              {/* Translations (docs/10-multilingual-content.md §4.7) */}
+              <TranslationsPanel
+                kind="book"
+                language={language}
+                onLanguageChange={setLanguage}
+                isEditMode={isEditMode}
+                entityId={initial?.id}
+                translations={initial?.translations ?? []}
+                translationStale={initial?.translationStale ?? null}
+                adminEditPath={(id) => `/admin/books/${id}/edit`}
+                onLinkExisting={async (targetId) => {
+                  if (!initial) return;
+                  await linkBookTranslation(initial.id, targetId);
+                }}
+                onMarkReviewed={async () => {
+                  if (!initial) return;
+                  await markBookTranslationReviewed(initial.id);
+                }}
+              />
             </div>
 
             <div className="post-form-actions">

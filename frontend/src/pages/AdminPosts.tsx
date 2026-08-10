@@ -3,7 +3,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { fetchAdminPosts, deletePost, updatePostStatus, UnauthorizedError } from '../api';
 import { logout } from '../auth';
 import ThemeToggle from '../components/ThemeToggle';
-import type { BlogPost } from '../types';
+import type { BlogPost, ContentLanguage } from '../types';
+import { LANGUAGE_LABEL } from '../types';
 import PostForm from './PostForm';
 
 function formatDate(dateStr: string | null): string {
@@ -371,6 +372,7 @@ export default function AdminPosts() {
                   <tr>
                     <th>Title</th>
                     <th>Category</th>
+                    <th>Language</th>
                     <th>Visibility</th>
                     <th>Status</th>
                     <th>Published</th>
@@ -386,6 +388,9 @@ export default function AdminPosts() {
                         <div className="post-title-cell__slug">{post.slug}</div>
                       </td>
                       <td>{post.category || <span style={{ color: 'var(--color-text-light)' }}>—</span>}</td>
+                      <td>
+                        <LanguageBadge language={post.language} stale={post.translationStale} />
+                      </td>
                       <td>
                         <VisibilityBadge visibility={post.visibility} accessGroupCount={post.accessGroupCount} />
                       </td>
@@ -529,6 +534,23 @@ function VisibilityBadge({ visibility, accessGroupCount }: { visibility: 'PUBLIC
       🔒 Private
       {accessGroupCount != null && accessGroupCount > 0 && (
         <span className="badge__count"> · {accessGroupCount} group{accessGroupCount === 1 ? '' : 's'}</span>
+      )}
+    </span>
+  );
+}
+
+/** Read-only signal, no action — the per-row "Translate" action was deliberately
+ * left out (docs/10-multilingual-content.md §4.7): a row here has no unsaved
+ * state to worry about, but it would duplicate the Translations panel's logic
+ * for no benefit. Editing a translation link happens in the post's edit form. */
+function LanguageBadge({ language, stale }: { language: ContentLanguage; stale?: boolean | null }) {
+  return (
+    <span className="badge badge--language" title={LANGUAGE_LABEL[language]}>
+      {language}
+      {stale && (
+        <span className="badge__count" title="Source has changed since this translation was last reviewed">
+          {' '}· stale
+        </span>
       )}
     </span>
   );

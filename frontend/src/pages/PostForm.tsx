@@ -9,14 +9,17 @@ import {
   createPost, updatePost, uploadContentImage, UnauthorizedError,
   fetchAccessGroups, fetchAdminUsers, fetchPostAccessGroups, fetchPostAccessUsers,
   setPostAccessGroups as apiSetPostAccessGroups, setPostAccessUsers as apiSetPostAccessUsers,
+  linkPostTranslation, markPostTranslationReviewed,
 } from '../api';
+import type { PostRequest } from '../api';
 import { logout } from '../auth';
 import ImageUploadButton from '../components/ImageUploadButton';
 import VideoUploadButton from '../components/VideoUploadButton';
 import YoutubeEmbedButton from '../components/YoutubeEmbedButton';
 import AttachmentManager from '../components/AttachmentManager';
+import TranslationsPanel from '../components/TranslationsPanel';
 import { alignCommands } from '../components/editorCommands';
-import type { BlogPost, PostVisibility, AccessGroup, UserBrief } from '../types';
+import type { BlogPost, PostVisibility, AccessGroup, UserBrief, ContentLanguage } from '../types';
 
 const SQL_RE = /^(select|insert|update|delete|create|drop|alter|with|truncate|explain|grant|revoke|from|where)\s/i;
 const BASH_RE = /^(sudo|apt(-get)?|yum|dnf|brew|npm|yarn|pnpm|git|docker|kubectl|helm|curl|wget|ls|cd|mkdir|rmdir|rm|cp|mv|chmod|chown|grep|find|ps|kill|systemctl|service|cat|echo|export|source|python|pip|java|mvn|gradle)\s/i;
@@ -68,6 +71,7 @@ export default function PostForm({ initial, existingSlugs, onSave, onCancel }: P
   const [status, setStatus] = useState<'DRAFT' | 'PUBLISHED'>(initial?.status ?? 'DRAFT');
 
   const [visibility, setVisibility] = useState<PostVisibility>(initial?.visibility ?? 'PUBLIC');
+  const [language, setLanguage] = useState<ContentLanguage>(initial?.language ?? 'VI');
   const [availableGroups, setAvailableGroups] = useState<AccessGroup[]>([]);
   const [availableUsers, setAvailableUsers] = useState<UserBrief[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>([]);
@@ -131,7 +135,7 @@ export default function PostForm({ initial, existingSlugs, onSave, onCancel }: P
       return;
     }
 
-    const payload = { title, slug: trimmedSlug, category, excerpt, content, tags: tagsArray, status, visibility };
+    const payload = { title, slug: trimmedSlug, category, excerpt, content, tags: tagsArray, status, visibility, language };
 
     try {
       let saved: BlogPost;
@@ -539,6 +543,48 @@ export default function PostForm({ initial, existingSlugs, onSave, onCancel }: P
               </div>
             </div>
           )}
+
+          <p className="field field--full" style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '-8px 0 0' }}>
+            Visibility and access apply to all language versions of this post.
+          </p>
+
+          {/* Translations (docs/10-multilingual-content.md §4.7) */}
+          <TranslationsPanel
+            kind="post"
+            language={language}
+            onLanguageChange={setLanguage}
+            isEditMode={isEditMode}
+            entityId={initial?.id}
+            translations={initial?.translations ?? []}
+            translationStale={initial?.translationStale ?? null}
+            adminEditPath={() => '/admin/posts'}
+            onCreateLinked={async ({ language: newLanguage, copyContent }) => {
+              if (!initial) return;
+              await createPost(
+                {
+                  title: initial.title,
+                  slug: `${initial.slug}-${newLanguage.toLowerCase()}`,
+                  excerpt: copyContent ? initial.excerpt : '',
+                  content: copyContent ? initial.content ?? '' : '',
+                  category: initial.category,
+                  tags: initial.tags,
+                  status: 'DRAFT',
+                  visibility: initial.visibility,
+                  language: newLanguage,
+                } satisfies PostRequest,
+                undefined,
+                initial.id,
+              );
+            }}
+            onLinkExisting={async (targetId) => {
+              if (!initial) return;
+              await linkPostTranslation(initial.id, targetId);
+            }}
+            onMarkReviewed={async () => {
+              if (!initial) return;
+              await markPostTranslationReviewed(initial.id);
+            }}
+          />
 
           {/* Cover Image */}
           <div className="field field--full">

@@ -253,6 +253,52 @@ img {
   background: rgba(255,255,255,0.08);
 }
 
+/* ── Language preference toggle (docs/10-multilingual-content.md §4.3) ── */
+.language-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.08);
+}
+
+.language-toggle__option {
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  color: rgba(255,255,255,0.65);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition);
+}
+
+.language-toggle__option:hover {
+  color: #fff;
+}
+
+.language-toggle__option--active {
+  color: #fff;
+  background: var(--color-accent);
+}
+
+.language-toggle__option:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Outside the always-dark nav bar (none at Phase 1, but keep symmetrical with theme-toggle) */
+.language-toggle:not(.site-nav .language-toggle):not(.admin-topbar .language-toggle) {
+  background: var(--color-border-soft);
+}
+
+.language-toggle:not(.site-nav .language-toggle):not(.admin-topbar .language-toggle) .language-toggle__option {
+  color: var(--color-text-muted);
+}
+
 .site-nav__user {
   display: inline-flex;
   align-items: center;
@@ -1050,6 +1096,50 @@ img {
   line-height: 1.15;
   margin-bottom: 20px;
   letter-spacing: -0.5px;
+}
+
+/* ── Translation switcher (docs/10-multilingual-content.md §4.4) ── */
+.translation-switcher {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -8px 0 20px;
+  font-size: 13px;
+}
+
+.translation-switcher__label {
+  color: var(--color-text-muted);
+}
+
+.translation-switcher__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(61,79,232,0.1);
+  color: var(--color-accent-dark);
+  font-weight: 600;
+  text-decoration: none;
+  transition: background var(--transition);
+}
+
+.translation-switcher__link:hover {
+  background: rgba(61,79,232,0.18);
+}
+
+.translation-switcher__link--draft {
+  background: var(--color-border-soft);
+  color: var(--color-text-muted);
+}
+
+.translation-switcher__draft-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-warning, #b45309);
 }
 
 .post-detail__tags {
@@ -2011,6 +2101,21 @@ img {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+/* Dual-language content (docs/10-multilingual-content.md §4.7) — read-only
+ * language + staleness signal on admin list rows. Amber for `stale` since it
+ * needs attention (the source changed since this translation was reviewed),
+ * distinct from the neutral badge color itself. */
+.badge--language {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.badge--language .badge__count {
+  color: #b45309;
+  font-weight: 700;
 }
 
 .badge__count {

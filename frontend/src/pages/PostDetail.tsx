@@ -14,7 +14,9 @@ import ThemeToggle from '../components/ThemeToggle';
 import NavUser from '../components/NavUser';
 import RelatedPosts from '../components/RelatedPosts';
 import PostAttachments from '../components/PostAttachments';
+import TranslationSwitcher from '../components/TranslationSwitcher';
 import { useSeo } from '../useSeo';
+import { LANGUAGE_BCP47 } from '../types';
 
 const DENIAL_COPY: Record<AccessDenialCode, { title: string; desc: string }> = {
   NOT_AUTHENTICATED: {
@@ -105,6 +107,19 @@ export default function PostDetail() {
     return () => { cancelled = true; };
   }, [slug]);
 
+  // Self-inclusive, reciprocal hreflang set for this page's <head> (docs/10 §5.2) —
+  // the sitemap is the primary channel (docs/10 §5.1), this is the secondary one.
+  // Built from PUBLISHED siblings only; a published original also gets an x-default
+  // pointing at itself when there is no unpublished-original ambiguity to resolve here
+  // (the backend's `translations` already omits DRAFT siblings for public callers).
+  const publishedSiblings = post ? post.translations.filter((t) => t.status === 'PUBLISHED') : [];
+  const alternates = post && publishedSiblings.length > 0
+    ? [
+        { hreflang: LANGUAGE_BCP47[post.language], path: `/posts/${post.slug}` },
+        ...publishedSiblings.map((t) => ({ hreflang: LANGUAGE_BCP47[t.language], path: `/posts/${t.slug}` })),
+      ]
+    : undefined;
+
   useSeo(
     post
       ? {
@@ -115,6 +130,8 @@ export default function PostDetail() {
           image: post.hasCoverImage && post.coverImageUrl
             ? window.location.origin + post.coverImageUrl
             : undefined,
+          lang: LANGUAGE_BCP47[post.language],
+          alternates,
           jsonLd: {
             '@context': 'https://schema.org',
             '@type': 'BlogPosting',
@@ -219,6 +236,12 @@ export default function PostDetail() {
               </div>
 
               <h1 className="post-detail__title">{post.title}</h1>
+
+              <TranslationSwitcher
+                translations={post.translations}
+                publicPath={(slug) => `/posts/${slug}`}
+                adminEditPath={() => '/admin/posts'}
+              />
 
               {post.seriesInfo && (
                 <div className="series-nav">

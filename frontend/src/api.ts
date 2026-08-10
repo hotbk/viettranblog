@@ -6,7 +6,7 @@ import type {
   AdminAttemptSummary, AdminAttemptDetail, UserStatus, AccessGroup, AccessGroupBrief, PostBrief, UserBrief,
   AccessRequest, AuditLogEntry, MeResponse, AccessDenialCode, RelatedPost, PostAttachment, AboutContent,
   Book, BookFileType, BookStatus, BookVisibility, BookMetadataVisibility, ReadProgress, ProgressUnit,
-  BookHighlight, MyBookHighlight, HighlightAnchorType, HighlightColor, HighlightRect,
+  BookHighlight, MyBookHighlight, HighlightAnchorType, HighlightColor, HighlightRect, ContentLanguage,
 } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
@@ -60,6 +60,7 @@ export interface PostRequest {
   status: 'DRAFT' | 'PUBLISHED';
   visibility: PostVisibility;
   privateMetadataVisibility?: PostMetadataVisibility;
+  language?: ContentLanguage;
 }
 
 export type PostResponse = BlogPost;
@@ -67,6 +68,7 @@ export type PostResponse = BlogPost;
 interface PostQuery {
   q?: string;
   category?: string;
+  language?: ContentLanguage;
 }
 
 export async function fetchPosts(query: PostQuery = {}): Promise<BlogPost[]> {
@@ -74,6 +76,7 @@ export async function fetchPosts(query: PostQuery = {}): Promise<BlogPost[]> {
 
   if (query.q) params.set('q', query.q);
   if (query.category) params.set('category', query.category);
+  if (query.language) params.set('language', query.language);
 
   const response = await fetch(`${API_BASE_URL}/posts?${params.toString()}`, {
     headers: publicAuthHeader(),
@@ -169,7 +172,11 @@ export async function fetchAdminPosts(): Promise<BlogPost[]> {
   return response.json();
 }
 
-export async function createPost(data: PostRequest, coverImage?: File): Promise<PostResponse> {
+export async function createPost(
+  data: PostRequest,
+  coverImage?: File,
+  translationOfPostId?: number,
+): Promise<PostResponse> {
   const fd = new FormData();
   fd.append('title', data.title);
   fd.append('slug', data.slug);
@@ -180,6 +187,8 @@ export async function createPost(data: PostRequest, coverImage?: File): Promise<
   fd.append('status', data.status);
   fd.append('visibility', data.visibility);
   if (data.privateMetadataVisibility) fd.append('privateMetadataVisibility', data.privateMetadataVisibility);
+  if (data.language) fd.append('language', data.language);
+  if (translationOfPostId != null) fd.append('translationOfPostId', String(translationOfPostId));
   if (coverImage) fd.append('coverImage', coverImage);
 
   const response = await fetch(`${API_BASE_URL}/posts`, {
@@ -193,7 +202,8 @@ export async function createPost(data: PostRequest, coverImage?: File): Promise<
   }
 
   if (!response.ok) {
-    throw new Error('Failed to create post');
+    const b = await response.json().catch(() => ({}));
+    throw new Error((b as { message?: string }).message ?? 'Failed to create post');
   }
 
   return response.json();
@@ -215,6 +225,7 @@ export async function updatePost(
   fd.append('status', data.status);
   fd.append('visibility', data.visibility);
   if (data.privateMetadataVisibility) fd.append('privateMetadataVisibility', data.privateMetadataVisibility);
+  if (data.language) fd.append('language', data.language);
   fd.append('removeCoverImage', removeCoverImage ? 'true' : 'false');
   if (coverImage) fd.append('coverImage', coverImage);
 
@@ -229,10 +240,40 @@ export async function updatePost(
   }
 
   if (!response.ok) {
-    throw new Error('Failed to update post');
+    const b = await response.json().catch(() => ({}));
+    throw new Error((b as { message?: string }).message ?? 'Failed to update post');
   }
 
   return response.json();
+}
+
+// ── Translation management (docs/10-multilingual-content.md §3.2) ─────────────
+
+/** `targetId: null` unlinks the row into a fresh group of its own. */
+export async function linkPostTranslation(id: number, targetId: number | null): Promise<PostResponse> {
+  const response = await fetch(`${API_BASE_URL}/admin/posts/${id}/translation-link`, {
+    method: 'PUT',
+    headers: { ...authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ targetId }),
+  });
+  if (response.status === 401 || response.status === 403) throw new UnauthorizedError();
+  if (!response.ok) {
+    const b = await response.json().catch(() => ({}));
+    throw new Error((b as { message?: string }).message ?? 'Failed to link translation');
+  }
+  return response.json();
+}
+
+export async function markPostTranslationReviewed(id: number): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/admin/posts/${id}/translation-reviewed`, {
+    method: 'POST',
+    headers: authHeader(),
+  });
+  if (response.status === 401 || response.status === 403) throw new UnauthorizedError();
+  if (!response.ok) {
+    const b = await response.json().catch(() => ({}));
+    throw new Error((b as { message?: string }).message ?? 'Failed to mark translation reviewed');
+  }
 }
 
 export async function updatePostStatus(id: number, status: 'DRAFT' | 'PUBLISHED'): Promise<PostResponse> {
@@ -988,6 +1029,7 @@ interface BookQuery {
   q?: string;
   category?: string;
   fileType?: BookFileType;
+  language?: ContentLanguage;
 }
 
 export async function fetchBooks(query: BookQuery = {}): Promise<Book[]> {
@@ -995,6 +1037,7 @@ export async function fetchBooks(query: BookQuery = {}): Promise<Book[]> {
   if (query.q) params.set('q', query.q);
   if (query.category) params.set('category', query.category);
   if (query.fileType) params.set('fileType', query.fileType);
+  if (query.language) params.set('language', query.language);
 
   const response = await fetch(`${API_BASE_URL}/books?${params.toString()}`, {
     headers: publicAuthHeader(),
@@ -1053,6 +1096,7 @@ export interface BookRequest {
   visibility: BookVisibility;
   metadataVisibility?: BookMetadataVisibility;
   downloadable: boolean;
+  language?: ContentLanguage;
 }
 
 function buildBookFormData(data: BookRequest, file?: File, coverImage?: File): FormData {
@@ -1066,16 +1110,24 @@ function buildBookFormData(data: BookRequest, file?: File, coverImage?: File): F
   fd.append('visibility', data.visibility);
   if (data.metadataVisibility) fd.append('metadataVisibility', data.metadataVisibility);
   fd.append('downloadable', data.downloadable ? 'true' : 'false');
+  if (data.language) fd.append('language', data.language);
   if (file) fd.append('file', file);
   if (coverImage) fd.append('coverImage', coverImage);
   return fd;
 }
 
-export async function createBook(data: BookRequest, file: File, coverImage?: File): Promise<Book> {
+export async function createBook(
+  data: BookRequest,
+  file: File,
+  coverImage?: File,
+  translationOfBookId?: number,
+): Promise<Book> {
+  const fd = buildBookFormData(data, file, coverImage);
+  if (translationOfBookId != null) fd.append('translationOfBookId', String(translationOfBookId));
   const response = await fetch(`${API_BASE_URL}/admin/books`, {
     method: 'POST',
     headers: { ...authHeader() },
-    body: buildBookFormData(data, file, coverImage),
+    body: fd,
   });
   if (response.status === 401 || response.status === 403) throw new UnauthorizedError();
   if (!response.ok) {
@@ -1105,6 +1157,35 @@ export async function updateBook(
     throw new Error((b as { message?: string }).message ?? 'Failed to update book');
   }
   return response.json();
+}
+
+// ── Translation management (docs/10-multilingual-content.md §3.2) ─────────────
+
+/** `targetId: null` unlinks the row into a fresh group of its own. */
+export async function linkBookTranslation(id: number, targetId: number | null): Promise<Book> {
+  const response = await fetch(`${API_BASE_URL}/admin/books/${id}/translation-link`, {
+    method: 'PUT',
+    headers: { ...authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ targetId }),
+  });
+  if (response.status === 401 || response.status === 403) throw new UnauthorizedError();
+  if (!response.ok) {
+    const b = await response.json().catch(() => ({}));
+    throw new Error((b as { message?: string }).message ?? 'Failed to link translation');
+  }
+  return response.json();
+}
+
+export async function markBookTranslationReviewed(id: number): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/admin/books/${id}/translation-reviewed`, {
+    method: 'POST',
+    headers: authHeader(),
+  });
+  if (response.status === 401 || response.status === 403) throw new UnauthorizedError();
+  if (!response.ok) {
+    const b = await response.json().catch(() => ({}));
+    throw new Error((b as { message?: string }).message ?? 'Failed to mark translation reviewed');
+  }
 }
 
 export async function updateBookStatus(id: number, status: BookStatus): Promise<Book> {

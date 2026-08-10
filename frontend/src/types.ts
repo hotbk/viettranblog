@@ -1,3 +1,13 @@
+// ── Dual-language content (docs/10-multilingual-content.md §3) ──────────────
+// Shared across Post and Book, mirroring backend's common.ContentLanguage —
+// values must match the API query param / sitemap hreflang exactly (docs/10 §1.4).
+export type ContentLanguage = 'VI' | 'EN';
+export type TranslationOrigin = 'HUMAN' | 'MACHINE';
+
+/** BCP-47 code for hreflang / <html lang> / og:locale — mirrors the backend's bcp47(). */
+export const LANGUAGE_BCP47: Record<ContentLanguage, string> = { VI: 'vi', EN: 'en' };
+export const LANGUAGE_LABEL: Record<ContentLanguage, string> = { VI: 'Tiếng Việt', EN: 'English' };
+
 export type PostStatus = 'DRAFT' | 'PUBLISHED';
 
 // Access-control axis — independent of PostStatus (editorial workflow above).
@@ -232,6 +242,17 @@ export interface AttemptDetail extends AttemptSummary {
   answers: AnswerResult[];
 }
 
+/** A sibling language variant — flat, mirrors backend's PostResponse.TranslationRef /
+ * BookResponse.TranslationRef (same shape for both domains, docs/10 §3.1). */
+export interface TranslationRef {
+  id: number;
+  language: ContentLanguage;
+  slug: string;
+  title: string;
+  status: PostStatus; // BookStatus has identical values ('DRAFT' | 'PUBLISHED')
+  visibility: PostVisibility; // BookVisibility has identical values ('PUBLIC' | 'PRIVATE')
+}
+
 export interface BlogPost {
   id: number;
   title: string;
@@ -263,6 +284,16 @@ export interface BlogPost {
   accessGroupCount?: number | null;
   // Populated on the detail endpoint and the admin listing; [] on public list cards.
   attachments: PostAttachment[];
+  // --- Dual-language content (docs/10-multilingual-content.md §3) ---
+  language: ContentLanguage;
+  translationOrigin: TranslationOrigin;
+  // Admin-only convenience (null unless requested — public reads never send it).
+  translationStale: boolean | null;
+  // Sibling language variants, excluding this row. [] on a teaser and on public
+  // list rows (detail only). Public callers only ever see PUBLISHED siblings;
+  // admin callers (incl. the admin post listing — Post has no separate detail
+  // endpoint, docs/06-project-memory.md 2026-08-10 deviation) see every sibling.
+  translations: TranslationRef[];
 }
 
 export type AttachmentType = 'PDF' | 'DOC' | 'DOCX' | 'TXT';
@@ -319,6 +350,14 @@ export interface Book {
   publishedAt: string | null;
   // Admin-listing-only convenience; absent on public reads.
   accessGroupCount?: number | null;
+  // --- Dual-language content (docs/10-multilingual-content.md §3) ---
+  language: ContentLanguage;
+  translationOrigin: TranslationOrigin;
+  // Admin-only convenience (null unless requested — public reads never send it).
+  translationStale: boolean | null;
+  // Sibling language variants, excluding this row. Detail only (Book has a
+  // real GET /api/admin/books/{id} detail endpoint, unlike Post — docs/10 §3.1).
+  translations: TranslationRef[];
 }
 
 export interface AboutContent {
@@ -369,6 +408,9 @@ export interface MyBookHighlight {
   bookTitle: string;
   bookSlug: string;
   bookFileType: BookFileType;
+  // Lets a reader who highlighted both language editions tell them apart
+  // (docs/10-multilingual-content.md §7.5).
+  bookLanguage: ContentLanguage;
 }
 
 /** Lightweight card for the "related posts" sidebar widget — see fetchRelatedPosts. */

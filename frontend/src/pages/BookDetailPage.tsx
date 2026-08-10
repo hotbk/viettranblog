@@ -4,9 +4,11 @@ import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import { fetchBookBySlug, BookAccessDeniedError } from '../api';
 import type { Book, AccessDenialCode } from '../types';
+import { LANGUAGE_BCP47 } from '../types';
 import NavBrand from '../components/NavBrand';
 import ThemeToggle from '../components/ThemeToggle';
 import NavUser from '../components/NavUser';
+import TranslationSwitcher from '../components/TranslationSwitcher';
 import { useSeo } from '../useSeo';
 
 const DENIAL_COPY: Record<AccessDenialCode, { title: string; desc: string }> = {
@@ -72,12 +74,22 @@ export default function BookDetailPage() {
     return () => { cancelled = true; };
   }, [slug]);
 
+  const publishedSiblings = book ? book.translations.filter((t) => t.status === 'PUBLISHED') : [];
+  const alternates = book && publishedSiblings.length > 0
+    ? [
+        { hreflang: LANGUAGE_BCP47[book.language], path: `/library/${book.slug}` },
+        ...publishedSiblings.map((t) => ({ hreflang: LANGUAGE_BCP47[t.language], path: `/library/${t.slug}` })),
+      ]
+    : undefined;
+
   useSeo(
     book
       ? {
           title: book.title,
           description: book.description || `Read "${book.title}" on TECH2BLOGS.`,
           path: `/library/${book.slug}`,
+          lang: LANGUAGE_BCP47[book.language],
+          alternates,
         }
       : { title: 'Library', description: 'TECH2BLOGS library.', noindex: true }
   );
@@ -149,6 +161,13 @@ export default function BookDetailPage() {
               </div>
 
               <h1 className="post-detail__title">{book.title}</h1>
+
+              <TranslationSwitcher
+                translations={book.translations}
+                publicPath={(slug) => `/library/${slug}`}
+                adminEditPath={(id) => `/admin/books/${id}/edit`}
+              />
+
               {book.author && <p className="book-detail__author">by {book.author}</p>}
 
               {book.readProgress && book.readProgress.percent > 0 && (

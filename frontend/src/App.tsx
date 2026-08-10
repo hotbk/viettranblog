@@ -6,8 +6,10 @@ import { isAuthenticated } from './auth';
 import { isMemberAuthenticated } from './memberAuth';
 import NavBrand from './components/NavBrand';
 import ThemeToggle from './components/ThemeToggle';
+import LanguageToggle from './components/LanguageToggle';
 import NavUser from './components/NavUser';
 import { useSeo } from './useSeo';
+import { getLanguagePreference, languageQueryParam, setLanguagePreference, type LanguagePreference } from './contentLanguage';
 
 const HOME_DESCRIPTION =
   'Practical PostgreSQL, Oracle, and Kubernetes engineering notes: performance tuning, ' +
@@ -41,6 +43,9 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exams, setExams] = useState<ExamSummary[]>([]);
+  // Read synchronously from localStorage — no extra async step, no flash of
+  // the wrong language (docs/10-multilingual-content.md §4.5).
+  const [languagePref, setLanguagePref] = useState<LanguagePreference>(() => getLanguagePreference());
   const isMember = isMemberAuthenticated();
 
   const categories = useMemo(() => {
@@ -51,7 +56,7 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchPosts({ q: query, category });
+      const data = await fetchPosts({ q: query, category, language: languageQueryParam(languagePref) });
       setPosts(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unexpected error');
@@ -66,7 +71,12 @@ export default function App() {
     }, 250);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, category]);
+  }, [query, category, languagePref]);
+
+  function handleShowAllLanguages() {
+    setLanguagePreference('ALL');
+    setLanguagePref('ALL');
+  }
 
   useEffect(() => {
     fetchPublicExams().then(setExams).catch(() => { /* non-critical */ });
@@ -108,6 +118,7 @@ export default function App() {
             ) : (
               <Link to="/admin/login" className="site-nav__link">Admin</Link>
             )}
+            <LanguageToggle onChange={setLanguagePref} />
             <ThemeToggle />
             <NavUser />
           </div>
@@ -199,12 +210,23 @@ export default function App() {
           {!loading && !error && posts.length === 0 && (
             <div className="empty-state">
               <div className="empty-state__icon">&#128203;</div>
-              <p className="empty-state__title">No posts found</p>
+              <p className="empty-state__title">
+                {languagePref === 'ALL'
+                  ? 'No posts found'
+                  : `No ${languagePref === 'VI' ? 'Vietnamese' : 'English'} posts yet.`}
+              </p>
               <p className="empty-state__desc">
                 {query || category
                   ? 'Try a different search term or category.'
-                  : 'Check back soon — new posts are on the way.'}
+                  : languagePref === 'ALL'
+                    ? 'Check back soon — new posts are on the way.'
+                    : 'This article may only exist in the other language so far.'}
               </p>
+              {languagePref !== 'ALL' && (
+                <button className="btn btn--ghost" onClick={handleShowAllLanguages} style={{ marginTop: 16 }}>
+                  Show all languages
+                </button>
+              )}
             </div>
           )}
 

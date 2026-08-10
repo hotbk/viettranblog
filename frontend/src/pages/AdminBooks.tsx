@@ -3,7 +3,23 @@ import { Link, useNavigate } from 'react-router-dom';
 import { fetchAdminBooks, deleteBook, updateBookStatus, UnauthorizedError } from '../api';
 import { logout } from '../auth';
 import ThemeToggle from '../components/ThemeToggle';
-import type { Book } from '../types';
+import type { Book, ContentLanguage } from '../types';
+import { LANGUAGE_LABEL } from '../types';
+
+/** Read-only signal, no action — see the same note in AdminPosts.tsx's LanguageBadge
+ * (docs/10-multilingual-content.md §4.7). */
+function LanguageBadge({ language, stale }: { language: ContentLanguage; stale?: boolean | null }) {
+  return (
+    <span className="badge badge--language" title={LANGUAGE_LABEL[language]}>
+      {language}
+      {stale && (
+        <span className="badge__count" title="Source has changed since this translation was last reviewed">
+          {' '}· stale
+        </span>
+      )}
+    </span>
+  );
+}
 
 export default function AdminBooks() {
   const navigate = useNavigate();
@@ -119,6 +135,7 @@ export default function AdminBooks() {
                   <th>Title</th>
                   <th>Slug</th>
                   <th>Type</th>
+                  <th>Language</th>
                   <th>Visibility</th>
                   <th>Status</th>
                   <th style={{ width: 200 }}>Actions</th>
@@ -130,6 +147,9 @@ export default function AdminBooks() {
                     <td><div className="post-title-cell__title">{book.title}</div></td>
                     <td><div className="post-title-cell__slug">{book.slug}</div></td>
                     <td style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>{book.fileType}</td>
+                    <td>
+                      <LanguageBadge language={book.language} stale={book.translationStale} />
+                    </td>
                     <td>
                       {book.visibility === 'PRIVATE' ? (
                         <span className="post-card__private-badge" title="Private book">

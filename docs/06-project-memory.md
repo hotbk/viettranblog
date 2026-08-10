@@ -1685,3 +1685,235 @@ this is reachable from the UI. `TASK-BE-017`/`TASK-FE-009` (machine
 translation) not started, Phase 2 per the design doc. The new admin
 `translations`/`translationStale` fields are not yet covered by a dedicated
 "drift" UI (that's `AdminPosts.tsx`/`AdminBooks.tsx` badges in `FE-L5`).
+
+### 2026-08-10 — TASK-FE-008 progress: FE-L1–L4 verified (dual-language frontend)
+
+Summary: found FE-L1 through most of FE-L5 already implemented, uncommitted,
+in the working tree at session start (not done in this session). Verified
+FE-L4 (`useSeo` SEO head) specifically against `docs/10-multilingual-content.md`
+§5.2/§9 and TASKS.md's acceptance line, fixed two new lint warnings it
+introduced, and re-ran the full check suite.
+
+What was verified as already correct (no functional change needed):
+- `frontend/src/useSeo.ts` — `lang`/`alternates` options, `document.documentElement.lang`
+  fix (was hardcoded `en`), `og:locale`/`og:locale:alternate`, self-referential
+  canonical untouched, and the R6 fix (`replaceAlternateLinks` removes every
+  `link[rel="alternate"][data-seo-alt]` before appending the current page's
+  set, tagged so it never touches an unrelated `rel="alternate"` link) — code
+  read confirms the A→B navigation bug (docs/10 §8 R6) cannot recur.
+- `PostDetail.tsx`/`BookDetailPage.tsx` — both call `useSeo` with `lang` and an
+  `alternates` array built from PUBLISHED siblings only.
+
+Gap found and accepted (not fixed — needs a backend field, out of scope for a
+frontend-only task): the per-page `alternates` array does not include an
+`x-default` entry, though docs/10 §5.2's interface comment says it should.
+Confirmed `translatedFromId` exists on `Post`/`Book` entities and is used by
+the sitemap's (already-shipped) `x-default`, but is **not exposed** on
+`PostResponse`/`BookResponse`/`TranslationRef` — the frontend has no data to
+compute "which sibling is the original" itself. Accepted as a known gap per
+docs/10 §5.2's own framing ("sitemap is authoritative, `<head>` links are
+reinforcement") rather than adding a backend field speculatively.
+
+Files changed this session:
+- `frontend/src/useSeo.ts` — extracted `alternatesKey`/`jsonLdKey` (`JSON.stringify`
+  results) to local consts before the `useEffect` dependency array, silencing
+  two new `react-hooks/exhaustive-deps` "complex expression" warnings that the
+  dual-language work had introduced. No behavior change.
+- `TASKS.md` — `TASK-FE-008` header `(NOT STARTED)` → `(IN PROGRESS)` with a
+  progress note (FE-L1–L4 done, FE-L5 partial, FE-L6 not run).
+
+Checks run: `cd frontend && npm run lint && npm run typecheck && npm run build`
+— lint 0 errors / 2 warnings (both pre-existing, in `HighlightPopup.tsx`,
+unrelated to this feature), typecheck clean, build succeeds (the one build
+warning is the pre-existing >500kB chunk notice, not new).
+
+Decisions:
+- Did not add an `isOriginal`/`translatedFromId`-on-`TranslationRef` backend
+  field to close the x-default gap — that's a backend change outside this
+  frontend-scoped task; flagged as a follow-up instead.
+- Did not touch FE-L5 (Translations panel completion, admin badges) or FE-L6
+  (full manual walkthrough) — separate remaining scope on `TASK-FE-008`.
+
+Known gaps / follow-ups:
+- Per-page `<head>` `alternates` omit `x-default` (see above) — would need
+  `translatedFromId` (or a derived `isOriginal` bool) added to
+  `PostResponse.TranslationRef`/`BookResponse.TranslationRef` to fix properly.
+  Low priority since the sitemap already carries `x-default` correctly.
+- `TASK-FE-008` still not complete: `AdminBookForm.tsx` Translations panel,
+  `AdminPosts.tsx`/`AdminBooks.tsx` language/stale badges (FE-L5), and the
+  FE-L6 full manual pass (VI/EN pair switch, sitemap check, A→B `<head>` check
+  in a live browser) remain.
+- None of this working tree's dual-language frontend changes are committed
+  yet (still `git status` modified/untracked at session start and end).
+
+### 2026-08-10 — TASK-FE-008 progress: FE-L5 completed (dual-language admin UI)
+
+Summary: completed the remaining FE-L5 scope — `AdminBookForm.tsx` had no
+Translations panel and neither admin list page had language/stale badges.
+`PostForm.tsx`'s panel was already done (see prior entry).
+
+Files changed:
+- `frontend/src/components/TranslationsPanel.tsx` — made `onCreateLinked`
+  optional. Reason: creating a linked *Book* always needs a physical file
+  upload (PDF/TXT), which this panel has no UI for and which is out of scope
+  to add here (would need a new upload flow inside a side panel). When the
+  prop is omitted, the "+ Empty / + Copy source content" buttons are replaced
+  by a hint: "create a new book normally... then link it below." `PostForm.tsx`
+  is unaffected (still passes `onCreateLinked`, since Post's create-linked
+  flow only needs text fields, no file).
+- `frontend/src/pages/AdminBookForm.tsx` — added `language` state (seeded from
+  `initial.language` on load, included in the save payload), imported
+  `linkBookTranslation`/`markBookTranslationReviewed`, and rendered
+  `TranslationsPanel` (kind="book", no `onCreateLinked`) plus the "applies to
+  all language versions" note — placed after the PRIVATE-only access panel
+  block (unconditional, matching `PostForm.tsx`'s layout), using
+  `adminEditPath={(id) => \`/admin/books/${id}/edit\`}` since Book (unlike
+  Post) has a real per-id admin edit route.
+- `frontend/src/pages/AdminPosts.tsx` / `AdminBooks.tsx` — added a `Language`
+  table column with a new local `LanguageBadge` component (language code +
+  a "· stale" suffix when `translationStale === true`); each file gets its
+  own copy rather than a shared component, matching this codebase's existing
+  precedent (`StatusBadge`/`VisibilityBadge` aren't shared between the two
+  pages either).
+- `frontend/src/styles.css` — new `.badge--language` (neutral gray) and
+  `.badge--language .badge__count` (amber, for the "stale" suffix) classes.
+
+Verified: `AdminBooks.tsx`'s list fetch (`GET /api/admin/books`) returns
+`translationStale` but an empty `translations` array per-row by design
+(`BookService.java` — Book has a real per-id detail endpoint, so the full
+sibling list is deferred to that call) — irrelevant here since the list badge
+only needs `language`/`translationStale`, not the full list.
+
+Checks run: `cd frontend && npm run lint && npm run typecheck && npm run build`
+— lint 0 errors / 2 pre-existing unrelated warnings, typecheck clean, build
+succeeds (same pre-existing >500kB chunk notice as before, not new).
+
+Decisions:
+- Did not implement a Book "create linked version" flow (Empty/Copy content)
+  — genuinely blocked by the file-upload requirement, not just deferred; a
+  real fix would need either a new inline file-picker in the panel or a
+  backend "duplicate this book's file into a new draft" endpoint, both out of
+  a frontend-only task's scope. Recorded as the honest scope boundary rather
+  than a half-built button that silently does nothing for Book.
+- `LanguageBadge` duplicated per admin list page rather than extracted to a
+  shared component, following this codebase's existing convention for
+  page-local badge components.
+
+Known gaps / follow-ups:
+- `TASK-FE-008`'s only remaining piece is FE-L6: the full manual walkthrough
+  (create a VI/EN pair, switch both ways, check `/sitemap.xml`, verify the
+  A→B `<head>` cleanup in a live browser, PRIVATE-gating from a MEMBER
+  account) — not yet run.
+- Book's "create linked version" gap above — if ever wanted, needs either a
+  backend file-duplication endpoint or an inline uploader in
+  `TranslationsPanel`; not scheduled.
+- Still nothing in this working tree is committed.
+
+### 2026-08-10 — TASK-FE-008 complete: FE-L6 live walkthrough (dual-language content)
+
+Summary: ran the full FE-L6 manual pass against a live dev stack (backend on
+`:19080` with `dev` profile/DataSeeder, frontend Vite dev server on `:5173`,
+already running in this environment) using Playwright (Chromium, already
+cached at `~/.cache/ms-playwright`) for the browser-driven checks and `curl`
+for the API-level ones. All checks passed; one already-known gap was
+re-confirmed (not newly found). Test data fully cleaned up afterward —
+verified post count and access-group `postCount`s back to their pre-test
+baseline.
+
+Checklist results (docs/10-multilingual-content.md §9 FE-L6):
+1. **Create a VI/EN pair via the admin UI** — created a VI post, used the new
+   Translations panel's "+ Copy source content" action to create the linked
+   EN draft (slug auto-suffixed `-en`, `DRAFT`, language `EN`) — exercises
+   `onCreateLinked` end-to-end, not just code review. Published both.
+2. **Admin badges** — `AdminPosts.tsx`'s new Language column showed `VI` /
+   `EN · stale` correctly (stale because the VI row was saved again after the
+   EN draft was created, exactly the `sourceUpdatedAt` staleness computation
+   working as designed) — visual confirmation of FE-L5's `LanguageBadge`.
+3. **Translations panel sibling view + "Mark as reviewed"** — opening the EN
+   draft's edit form showed the VI sibling (title, `PUBLISHED` badge, Edit
+   link), the staleness warning, and the "Mark as reviewed" action — all
+   rendered correctly against real data.
+4. **Switcher navigation** — VI→EN switcher click did a real `<Link>`
+   navigation (URL changed to the `-en` slug, not just a client-side
+   re-render); `<html lang>`, `og:locale`/`og:locale:alternate`, and
+   self-referential `canonical` all updated correctly; browser Back returned
+   to the VI URL.
+5. **Language preference + empty state** — header VI/EN/All toggle filtered
+   the home list correctly (verified via `localStorage['content_language']`
+   and visible post count); combining the EN filter with a search term that
+   only matches a VI-only post produced "No English posts yet." +
+   "Try a different search term or category." + a working "Show all
+   languages" button that flips the preference to `ALL` and re-reveals the
+   match.
+6. **Sitemap** — `curl .../sitemap.xml` showed reciprocal, self-inclusive
+   `xhtml:link` entries for the pair (`hreflang="vi"`, `"en"`, `"x-default"`
+   pointing at the VI/original URL) — confirms `BE-L5` still holds under real
+   data.
+7. **R6 regression check (A→B `<head>` cleanup)** — SPA-navigated from the
+   test pair's VI post to a **different, unrelated** post (`document.head`
+   inspected via `page.evaluate`, comparing full `href` values, not just
+   `hreflang` codes, to rule out a false pass from both pairs coincidentally
+   using `vi`/`en`) — confirmed the previous post's `data-seo-alt` links were
+   completely gone and replaced by the new post's own set. `replaceAlternateLinks`
+   verified correct under real SPA navigation, not just code review.
+8. **PRIVATE + group-grant gating across siblings (R2)** — set the VI post
+   PRIVATE with an access-group grant; confirmed via the DB-backed
+   `GET /api/admin/posts` that the backend **propagated PRIVATE + the grant to
+   the EN sibling too** (`PostService.create/update`'s group-level propagation,
+   docs/10 §2.3) — the admin list UI just didn't locally refresh the
+   non-edited sibling row (cosmetic staleness in `AdminPosts.tsx`'s
+   update-in-place pattern, not a security issue; not fixed, out of this
+   session's scope). Logged in as `active_member` (seeded MEMBER, `ACTIVE`)
+   and got `200` on both slugs on the first attempt — traced this to picking
+   an access group `active_member` already belonged to (test-setup mistake,
+   caught by checking `GET /api/admin/access-groups/{id}/users` before
+   concluding it was a bug). Re-ran against a group `active_member` is
+   genuinely not in: both VI and EN slugs correctly returned
+   `403 {"code":"NO_ACCESS"}` — the exact R2 acceptance criterion.
+
+Known gap re-confirmed (not new — already documented in the 2026-08-08
+exam-access entry): deleting a post that still has `post_access_groups` rows
+fails with a raw FK violation, caught by `GlobalExceptionHandler` into
+`500 DATABASE_ERROR` — `PostService.delete()` still lacks the cleanup
+`ExamService.deleteExam()` already has. Hit this directly while cleaning up
+test data; worked around it by clearing the post's access groups
+(`PUT .../access-groups` with `[]`) before deleting.
+
+Cleanup verified: both test posts deleted (`204`), `GET /api/admin/posts`
+back to the pre-test count (8), both touched access groups' `postCount` back
+to `1` (their pre-test value).
+
+Tooling note: no project-run skill existed for this app; used Playwright's
+already-installed Chromium binary (`~/.cache/ms-playwright/chromium-1234`)
+via a locally-installed `playwright-core` (npm install in the scratchpad
+dir, not added to `frontend/package.json`). The frontend dev server requires
+`https://` (self-signed cert via `@vitejs/plugin-basic-ssl`, see
+`vite.config.ts`) — plain `http://` gets "Empty reply from server", not an
+obvious error. Did not recommend `/run-skill-generator` since this took
+several iterations of trial and error (selector mismatches, cert handling)
+rather than "just working."
+
+Checks run: full FE-L6 checklist above, all live against real backend +
+browser (not simulated/mocked). Automated `npm run lint/typecheck/build`
+already covered in the FE-L4/FE-L5 entries earlier the same day.
+
+Decisions:
+- Did not fix the `PostService.delete()` FK-violation gap — pre-existing,
+  already tracked, out of a frontend-scoped task's boundary.
+- Did not fix `AdminPosts.tsx`'s sibling-row staleness after a translation-group
+  propagating write — cosmetic only (the access-control data itself is
+  correct), and back-end-confirmed via direct API call in this session; noted
+  as a real but low-priority follow-up rather than fixed speculatively.
+
+Known gaps / follow-ups:
+- `PostService.delete()` FK-violation gap (see above) — same class of issue
+  already fixed for `ExamService.deleteExam()`; `PostService` still needs the
+  equivalent `post_access_groups`/`post_user_permissions` cleanup before
+  `deleteById`.
+- `AdminPosts.tsx` (and likely `AdminBooks.tsx`, not separately verified)
+  don't refresh a translation sibling's row after a group-propagating write to
+  the row being edited — only a full reload shows the sibling's updated
+  visibility/access badge. Low priority: the underlying access control is
+  correct, this is purely an admin-UI staleness cosmetic issue.
+- Everything in this working tree (FE-L1 through FE-L6 for `TASK-FE-008`) is
+  still uncommitted — no branch/PR opened yet.

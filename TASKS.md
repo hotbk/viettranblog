@@ -457,9 +457,14 @@ Not implemented here (separate tickets, per task boundary): `TASK-FE-008`
 
 ---
 
-### TASK-FE-008 — Dual-language content (VI/EN), frontend (NOT STARTED)
+### TASK-FE-008 — Dual-language content (VI/EN), frontend (DONE)
 
 Owner agent: `frontend-agent`
+
+Progress (uncommitted working tree, 2026-08-10): FE-L1 through FE-L6 all
+verified/completed against a live dev backend + browser walkthrough — see
+`docs/06-project-memory.md` 2026-08-10 entries for the full checklist and
+results. Not yet committed to a branch/PR.
 
 Depends on `TASK-BE-016` (needs live endpoints). Full design:
 `docs/10-multilingual-content.md` §4, §9 (FE-L1 through FE-L6).
