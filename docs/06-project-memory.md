@@ -1498,12 +1498,113 @@ Known gaps carried forward:
 
 ---
 
-### 2026-08-10 — TASK-BE-016: Dual-language content (VI/EN), backend
+### 2026-08-10 — Book highlights: frontend was never actually wired in (found + fixed)
 
-(Note: this entry was written on a branch cut directly from `main`, before
-the separate `feat/book-highlights-frontend-wiring` branch — which has its
-own "Book highlights: frontend was never actually wired in" memory entry —
-had merged. That entry isn't duplicated here; it'll arrive via its own PR.)
+Summary: User asked to "re-check the highlight/note feature on books." Backend
+was solid (15/15 integration tests, real CI run — see the PR #2 entry
+earlier). But `HighlightPopup.tsx`, `HighlightNoteEditor.tsx`,
+`BookHighlightsPanel.tsx`, `useBookHighlights.ts` existed, compiled, and
+lint-passed — while being imported **nowhere** outside themselves.
+`BookReaderPage.tsx`/`PdfReader.tsx`/`TxtReader.tsx` had zero highlight logic.
+A real user selecting text in a book saw nothing happen. `TASK-BE-014` and
+`docs/09`'s header had been marked DONE/implemented earlier the same day
+(previous entry) based on code existing + tests passing — correct for the
+backend, wrong for the feature as a whole. Lesson for future memory entries:
+"tests pass" and "reachable from the UI" are different claims; check both.
+
+Wired up per `docs/09-book-highlights-phase2.md` §6 (read in full first):
+
+- **`TxtReader.tsx`**: replaced the Phase-3-only single-pass `renderHighlighted()`
+  with the boundary-sweep renderer §6.2 specifies (two overlapping range sets —
+  highlights and search matches — via sorted/deduped boundary offsets, one
+  node per segment, `data-offset` on every segment for O(1) selection→offset
+  resolution via `closest('[data-offset]')`). Re-verified Phase 3's four
+  manual search behaviors by reading through the new logic (matches array/
+  matchLen/currentMatchIndex handling is untouched; only the render pass
+  changed) — could not click-test in this environment (see below).
+- **`PdfReader.tsx`**: `renderTextLayer` now `true` (current page only, per
+  §6.3), `TextLayer.css` imported lazily inside the existing
+  `import('react-pdf')` step (confirmed via build output: it lands in its own
+  `TextLayer-*.css` chunk, not the eager main CSS bundle — same verification
+  method Phase 3 used for its `pdfjs-dist` type-only import). Selection →
+  normalized rects via `Range.getClientRects()` relative to the `<Page>`
+  root's `getBoundingClientRect()` (obtained via react-pdf's `inputRef`).
+  **Deviation from §6.3's literal z-order/pointer-events spec**: rather than
+  fighting pdf.js's `.textLayer` (verified in `node_modules` to be
+  `position:absolute; inset:0; z-index:2`, i.e. it covers the whole page
+  regardless of where its actual text spans sit) for click-to-edit, the
+  highlight overlay is `pointer-events:none` end-to-end and clicks on an
+  existing highlight are resolved by manual coordinate hit-testing in the
+  same `onMouseUp` handler that captures new selections. Chosen specifically
+  because it was reasoned through by reading pdf.js's shipped CSS, not
+  verified by rendering it — a z-index fight is not something to guess at
+  blind. "Text stays selectable through it" (the doc's original goal) is
+  given up in exchange — clicking existing highlighted text opens its note
+  instead of letting you re-select under it, matching how most highlight
+  tools actually behave in practice.
+- **`BookReaderPage.tsx`**: now owns `useBookHighlights(book.id, loggedIn)`,
+  passes highlights + create/updateNote/delete down to whichever reader is
+  mounted, renders `BookHighlightsPanel` toggled from a new `ReaderToolbar`
+  button, plus a "My Highlights" link. `?highlight={id}` deep-link folded
+  into the existing derived `resumeChoice` expression as a third source (not
+  a new effect+setState — this file hit `react-hooks/set-state-in-effect`
+  once before; derive-don't-sync is the established idiom here).
+- **`MyHighlightsPage.tsx`** (new) at `/library/highlights` — cross-book list
+  grouped by book, `stale` badge, inline note edit/delete, "Open in book"
+  deep-link. Linked from `ReaderToolbar` (in-reader) and `LibraryPage`'s nav
+  (logged-in only) — not a top-level nav item, per §6.1's explicit scope
+  note ("don't repeat the ~12-file nav/footer chore About/Library each
+  paid for").
+- **`HighlightPopup.tsx`**: added `onMouseDown={(e) => e.preventDefault()}`
+  on every button — without it, a plain click's mousedown collapses
+  `window.getSelection()` *before* the click handler (`onPickColor`/
+  `onAddNote`) runs, so the just-made selection would already be gone. Not
+  in the design doc; found by reasoning through the actual event order, not
+  by testing in a browser.
+- Jump-to-highlight (both readers) changed from a one-shot "applied" ref to
+  guarding on the *id itself* changing, so clicking a different highlight in
+  the panel re-jumps every time, not just the very first deep-link.
+- `api.ts`'s 5 highlight functions already existed and already used
+  `publicAuthHeader()` correctly (checked first — this was risk H6 in
+  `docs/09` §8, "members can't actually use it" — turned out to be a
+  non-issue, already fixed whenever it was originally written).
+- CSS: `.reader-highlight`/`.pdf-highlight-rect` (4 colors each),
+  `.highlight-popup`(`--note`), `.highlight-note-editor--inline`,
+  `.highlights-panel` (+ a `--page` list variant reused standalone on
+  `MyHighlightsPage`), `.reader-highlight-toast`. None of this existed
+  before — the components had been built with zero corresponding styles.
+
+**Could not verify in this environment**: no `java`/`mvn`/Postgres and no way
+to actually open a browser and select text, so the entire selection→offset
+math (TXT `data-offset` walk) and selection→rect math (PDF normalized
+coordinates) is reasoned-through and type-checked, not click-tested. Flagged
+explicitly rather than silently assumed correct. `npm run lint`/`typecheck`/
+`build` all clean; build output confirms `TextLayer.css` and the `react-pdf`
+chunk stayed correctly lazy (chunk size unchanged from before this change).
+`mvn test` not re-run — no backend files were touched, this was frontend-only
+per the task's explicit scope, and no genuine backend gap was found while
+wiring (H6 checked and was already fine, see above).
+
+Known gaps carried forward: the whole feature is now reachable but genuinely
+unverified end-to-end (needs a real browser + backend to confirm selection
+math and the PDF overlay actually line up visually) before calling this done
+in the way "tests pass" made it sound done earlier today.
+
+**Update, same day — live-verified.** The environment turned out to have real
+Java/Maven all along (just not on `PATH` by default). Once found, a stale dev
+backend process (running code from before this feature existed) was rebuilt
+and restarted, which surfaced two real Flyway drift gaps —
+`V2__add_book_highlights.sql`/`V3__add_books_file_version.sql`, written on
+the spot, applied, and verified against the real dev Postgres. The user then
+confirmed via a real browser screenshot: selection popup positioned correctly,
+color picker worked, note text entered — the create call itself failed
+first (fixed by the migrations above), then succeeded. The
+selection→offset/rect math this entry flagged as unverified is now confirmed
+correct in practice, not just by reasoning.
+
+---
+
+### 2026-08-10 — TASK-BE-016: Dual-language content (VI/EN), backend
 
 Summary: Implemented BE-L1 through BE-L7 of `docs/10-multilingual-content.md`
 in full. Each language is a full separate `Post`/`Book` row linked by a plain
@@ -1533,12 +1634,12 @@ Tests/checks run:
 - Booted `mvn spring-boot:run -Dspring-boot.run.profiles=dev` against the real
   dev Postgres (`personal-blog-postgres`, not H2): `V4` applied cleanly,
   `ddl-auto: validate` passed on startup (the thing H2-backed CI structurally
-  cannot check — see the two entries below this one from earlier today).
-  Live-verified via `curl`: `GET /api/posts?language=EN`, a post detail's
-  `translations` array (both directions of a real VI/EN pair), and
-  `/api/sitemap.xml`'s reciprocal `hreflang` alternates + `x-default`, all
-  correct against real data. Confirmed `psql`: new columns, both new unique
-  indexes, and `DataSeeder`'s new VI/EN demo pair all present as expected.
+  cannot check — see the entry above this one, same lesson). Live-verified
+  via `curl`: `GET /api/posts?language=EN`, a post detail's `translations`
+  array (both directions of a real VI/EN pair), and `/api/sitemap.xml`'s
+  reciprocal `hreflang` alternates + `x-default`, all correct against real
+  data. Confirmed `psql`: new columns, both new unique indexes, and
+  `DataSeeder`'s new VI/EN demo pair all present as expected.
 
 Decisions / deviations from `docs/10-multilingual-content.md` (flagged
 in-line in the doc's own §9 spirit — the doc author worked from a snapshot):

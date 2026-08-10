@@ -3726,3 +3726,350 @@ img {
   color: #1e293b;
   box-shadow: 0 0 0 2px #facc15;
 }
+
+/* ── Book highlights + notes (Phase 2, docs/09-book-highlights-phase2.md) ── */
+
+/* Inline marks — TXT reader (boundary-sweep renderer) and, implicitly, the
+   swatch/rect colors reused everywhere else a highlight's color shows up. */
+.reader-highlight {
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.reader-highlight--yellow { background: rgba(250, 204, 21, 0.38); }
+.reader-highlight--green  { background: rgba(34, 197, 94, 0.30); }
+.reader-highlight--pink   { background: rgba(236, 72, 153, 0.28); }
+.reader-highlight--blue   { background: rgba(59, 130, 246, 0.28); }
+
+/* PDF overlay — one absolutely-positioned div per normalized rect, rendered
+   as the last child inside react-pdf's <Page> (after canvas + text layer).
+   pointer-events: none throughout; clicks are resolved by manual hit-testing
+   in PdfReader's onMouseUp, not by these elements themselves — see that
+   file's module docblock for why. */
+.pdf-highlight-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pdf-highlight-rect {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 2px;
+  /* .reader-body__pdf-page is always white (a PDF canvas doesn't follow the
+     app theme), so multiply is correct in both light and dark mode — no
+     theme-conditional needed here. */
+  mix-blend-mode: multiply;
+}
+
+.pdf-highlight-rect--yellow { background: rgba(250, 204, 21, 0.55); }
+.pdf-highlight-rect--green  { background: rgba(34, 197, 94, 0.45); }
+.pdf-highlight-rect--pink   { background: rgba(236, 72, 153, 0.45); }
+.pdf-highlight-rect--blue   { background: rgba(59, 130, 246, 0.45); }
+
+.reader-toolbar__hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* Floating selection toolbar + note editor — HighlightPopup.tsx /
+   HighlightNoteEditor.tsx, positioned via computePopupStyle() (position:
+   fixed, set inline per-instance). */
+.highlight-popup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+}
+
+.highlight-popup--note {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 10px;
+}
+
+.highlight-popup__signin-text {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.highlight-popup__signin-btn {
+  padding: 5px 12px;
+  background: var(--color-accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.highlight-popup__swatches {
+  display: flex;
+  gap: 6px;
+}
+
+.highlight-popup__swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-border);
+  cursor: pointer;
+  padding: 0;
+}
+
+.highlight-popup__swatch--yellow { background: #facc15; }
+.highlight-popup__swatch--green  { background: #22c55e; }
+.highlight-popup__swatch--pink   { background: #ec4899; }
+.highlight-popup__swatch--blue   { background: #3b82f6; }
+
+.highlight-popup__swatch--selected {
+  border-color: var(--color-text);
+  box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-text);
+}
+
+.highlight-popup__note-btn {
+  padding: 5px 10px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--color-text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.highlight-popup__close {
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 4px;
+  margin-left: auto;
+}
+
+.highlight-note-editor--inline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  margin-top: 8px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.highlight-note-editor__textarea {
+  width: 100%;
+  min-height: 64px;
+  resize: vertical;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.highlight-note-editor__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.highlight-note-editor__count {
+  font-size: 11px;
+  color: var(--color-text-light);
+  margin-right: auto;
+}
+
+.highlight-note-editor__delete {
+  border: none;
+  background: none;
+  color: var(--color-error);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px;
+}
+
+/* Slide-over panel — this book's highlights, opened from ReaderToolbar. */
+.highlights-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(360px, 100vw);
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.highlights-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.highlights-panel__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.highlights-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Used standalone on MyHighlightsPage (not inside the fixed slide-over
+   container) — plain block flow instead of the panel's fixed positioning. */
+.highlights-panel__list--page {
+  padding: 0;
+  gap: 8px;
+}
+
+.highlights-panel__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+}
+
+.highlights-panel__list:not(.highlights-panel__list--page) .highlights-panel__item:hover {
+  background: var(--color-bg);
+}
+
+.highlights-panel__list--page .highlights-panel__item {
+  border: 1px solid var(--color-border-soft);
+  background: var(--color-surface);
+}
+
+.highlights-panel__swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-full);
+  border: none;
+  margin-top: 4px;
+  flex-shrink: 0;
+  cursor: pointer;
+  padding: 0;
+}
+
+.highlights-panel__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.highlights-panel__snippet {
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text);
+  cursor: pointer;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-decoration: none;
+}
+
+.highlights-panel__snippet:hover {
+  text-decoration: underline;
+}
+
+.highlights-panel__stale {
+  font-size: 11px;
+  color: var(--color-error);
+}
+
+.highlights-panel__note {
+  text-align: left;
+  border: none;
+  background: var(--color-bg);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.highlights-panel__add-note {
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--color-accent);
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.highlights-panel__delete {
+  border: none;
+  background: none;
+  color: var(--color-text-light);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px;
+  flex-shrink: 0;
+}
+
+.highlights-panel__delete:hover {
+  color: var(--color-error);
+}
+
+/* Inline error toast for a failed create/update/delete — TxtReader/PdfReader. */
+.reader-highlight-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  color: var(--color-error);
+  font-size: 13px;
+  z-index: 90;
+}
+
+.reader-highlight-toast button {
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+}

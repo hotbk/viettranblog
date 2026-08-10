@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { fetchBookBySlug, fetchBookFileBlob, BookAccessDeniedError } from '../api';
 import type { Book, AccessDenialCode } from '../types';
 import { isAuthenticated } from '../auth';
@@ -7,7 +7,9 @@ import { isMemberAuthenticated } from '../memberAuth';
 import ReaderToolbar from '../components/ReaderToolbar';
 import PdfReader from '../components/PdfReader';
 import TxtReader from '../components/TxtReader';
+import BookHighlightsPanel from '../components/BookHighlightsPanel';
 import { useReadingProgress } from '../hooks/useReadingProgress';
+import { useBookHighlights } from '../hooks/useBookHighlights';
 
 const DENIAL_TITLE: Record<AccessDenialCode, string> = {
   NOT_AUTHENTICATED: 'This book is private. Please sign in to continue.',
@@ -19,6 +21,8 @@ const DENIAL_TITLE: Record<AccessDenialCode, string> = {
 
 export default function BookReaderPage() {
   const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const loggedIn = isAuthenticated() || isMemberAuthenticated();
 
   const [book, setBook] = useState<Book | null>(null);
@@ -29,6 +33,21 @@ export default function BookReaderPage() {
   const [percent, setPercent] = useState(0);
 
   const [userChoice, setUserChoice] = useState<'resume' | 'restart' | null>(null);
+
+  // Highlights (Phase 2). `?highlight={id}` deep-links straight to one on open;
+  // panel clicks update the same state afterward (see jumpToHighlightId below).
+  const deepLinkHighlightId = (() => {
+    const raw = searchParams.get('highlight');
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) ? n : null;
+  })();
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [jumpToHighlightId, setJumpToHighlightId] = useState<number | null>(deepLinkHighlightId);
+  const { highlights, create, updateNote, remove } = useBookHighlights(book?.id ?? 0, loggedIn);
+
+  function requireSignIn() {
+    navigate('/member/login');
+  }
 
   useEffect(() => {
     if (!slug) return;
@@ -68,12 +87,19 @@ export default function BookReaderPage() {
   // Derived, not stored: 'pending' while the progress fetch is still in flight OR
   // there's a saved position awaiting an explicit choice; 'restart' once we know
   // there's nothing to resume. Only an explicit button click sets userChoice.
-  const resumeChoice: 'pending' | 'resume' | 'restart' = userChoice
-    ?? (initialProgress === undefined
-      ? 'pending'
-      : initialProgress && initialProgress.position > 0
+  // A highlight deep-link always wins over the resume prompt — "take me to
+  // this highlight" beats "continue from page 12?" — fed in as a third
+  // source rather than an effect that sets state (this file hit
+  // react-hooks/set-state-in-effect once already; derive-don't-sync is the
+  // established idiom here, see docs/06-project-memory.md).
+  const resumeChoice: 'pending' | 'resume' | 'restart' = deepLinkHighlightId != null
+    ? 'restart'
+    : userChoice
+      ?? (initialProgress === undefined
         ? 'pending'
-        : 'restart');
+        : initialProgress && initialProgress.position > 0
+          ? 'pending'
+          : 'restart');
 
   function handlePdfProgress(page: number, totalPages: number) {
     const pct = totalPages > 0 ? Math.round((page / totalPages) * 100) : 0;
@@ -131,6 +157,16 @@ export default function BookReaderPage() {
   // position — wait for the reader's choice so we don't flash page 1 first.
   const readyToRender = resumeChoice !== 'pending';
 
+  const highlightProps = {
+    highlights,
+    loggedIn,
+    onCreateHighlight: create,
+    onUpdateHighlightNote: updateNote,
+    onDeleteHighlight: remove,
+    onRequireSignIn: requireSignIn,
+    jumpToHighlightId,
+  };
+
   return (
     <div className="reader-page">
       <ReaderToolbar
@@ -138,14 +174,36 @@ export default function BookReaderPage() {
         backTo={`/library/${book.slug}`}
         percent={percent}
         downloadUrl={book.downloadable ? `/api/books/${book.id}/download` : null}
-      />
+      >
+        {loggedIn && (
+          <>
+            <button
+              type="button"
+              className={`reader-toolbar__btn${panelOpen ? ' reader-toolbar__btn--active' : ''}`}
+              onClick={() => setPanelOpen((o) => !o)}
+            >
+              ✎ Highlights{highlights.length > 0 ? ` (${highlights.length})` : ''}
+            </button>
+            <Link to="/library/highlights" className="reader-toolbar__btn">My Highlights</Link>
+          </>
+        )}
+      </ReaderToolbar>
 
       {readyToRender && book.fileType === 'PDF' && (
-        <PdfReader blob={blob} startPage={startPage} onProgress={handlePdfProgress} />
+        <PdfReader blob={blob} startPage={startPage} onProgress={handlePdfProgress} {...highlightProps} />
       )}
       {readyToRender && book.fileType === 'TXT' && (
-        <TxtReader blob={blob} startPercent={startPercent} onProgress={handleTxtProgress} />
+        <TxtReader blob={blob} startPercent={startPercent} onProgress={handleTxtProgress} {...highlightProps} />
       )}
+
+      <BookHighlightsPanel
+        open={panelOpen}
+        highlights={highlights}
+        onClose={() => setPanelOpen(false)}
+        onJump={(h) => { setJumpToHighlightId(h.id); setPanelOpen(false); }}
+        onUpdateNote={updateNote}
+        onDelete={remove}
+      />
 
       {showResumePrompt && initialProgress && (
         <div className="reader-resume-prompt">

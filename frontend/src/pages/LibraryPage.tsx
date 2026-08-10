@@ -84,6 +84,7 @@ export default function LibraryPage() {
           <div className="site-nav__links">
             <Link to="/" className="site-nav__link">Home</Link>
             <Link to="/library" className="site-nav__link site-nav__link--active">Library</Link>
+            {loggedIn && <Link to="/library/highlights" className="site-nav__link">My Highlights</Link>}
             <Link to="/about" className="site-nav__link">About</Link>
             <ThemeToggle />
             <NavUser />
