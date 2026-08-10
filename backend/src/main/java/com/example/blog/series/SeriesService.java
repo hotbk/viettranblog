@@ -1,10 +1,14 @@
 package com.example.blog.series;
 
+import com.example.blog.access.PostAccessService;
 import com.example.blog.common.NotFoundException;
 import com.example.blog.post.Post;
+import com.example.blog.post.PostMetadataVisibility;
 import com.example.blog.post.PostRepository;
 import com.example.blog.post.PostStatus;
+import com.example.blog.user.User;
 import java.util.List;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,13 +18,16 @@ public class SeriesService {
     private final SeriesRepository seriesRepository;
     private final SeriesPostRepository seriesPostRepository;
     private final PostRepository postRepository;
+    private final PostAccessService postAccessService;
 
     public SeriesService(SeriesRepository seriesRepository,
                          SeriesPostRepository seriesPostRepository,
-                         PostRepository postRepository) {
+                         PostRepository postRepository,
+                         PostAccessService postAccessService) {
         this.seriesRepository = seriesRepository;
         this.seriesPostRepository = seriesPostRepository;
         this.postRepository = postRepository;
+        this.postAccessService = postAccessService;
     }
 
     @Transactional(readOnly = true)
@@ -37,11 +44,43 @@ public class SeriesService {
                 .toList();
     }
 
+    /**
+     * Public path — the only one that must filter private posts out of the
+     * response (title/slug/excerpt would otherwise leak via this endpoint
+     * regardless of the linked post's own visibility; see plan §A leak #2).
+     * Deliberately NOT applied inside {@link #toDetail} itself, which is
+     * shared with the admin paths below that need to see everything to
+     * manage series order.
+     *
+     * Mirrors PostService.search's accessible/teaser/omit split (not a plain
+     * filter) — an inaccessible PUBLIC_METADATA post still shows as a locked
+     * teaser (title/excerpt, accessible=false) instead of vanishing, so a
+     * series that links private posts the viewer can't read yet doesn't read
+     * as broken/empty. AUTHORIZED_ONLY + inaccessible is omitted entirely.
+     */
     @Transactional(readOnly = true)
     public SeriesDetailResponse getBySlug(String slug) {
         Series series = seriesRepository.findBySlug(slug)
                 .orElseThrow(() -> new NotFoundException("SERIES_NOT_FOUND", "Series not found"));
-        return toDetail(series);
+        User currentUser = postAccessService.currentUserOrNull();
+        List<SeriesPost> seriesPosts = seriesPostRepository.findBySeriesIdOrderByPositionAsc(series.getId());
+        Set<Long> accessibleIds = postAccessService.resolveAccessiblePostIds(
+                currentUser, seriesPosts.stream().map(SeriesPost::getPost).toList());
+
+        List<SeriesPostItem> items = seriesPosts.stream()
+                .<SeriesPostItem>mapMulti((sp, consumer) -> {
+                    Post post = sp.getPost();
+                    if (accessibleIds.contains(post.getId())) {
+                        consumer.accept(toItem(sp, true));
+                    } else if (post.getPrivateMetadataVisibility() == PostMetadataVisibility.PUBLIC_METADATA) {
+                        consumer.accept(toItem(sp, false));
+                    }
+                    // else: AUTHORIZED_ONLY and inaccessible -> omit entirely, never sent to the client
+                })
+                .toList();
+        return new SeriesDetailResponse(
+                series.getId(), series.getTitle(), series.getSlug(), series.getDescription(),
+                series.getStatus(), items.size(), series.getCreatedAt(), series.getUpdatedAt(), items);
     }
 
     @Transactional(readOnly = true)
@@ -127,20 +166,27 @@ public class SeriesService {
                 s.getStatus(), postCount, s.getCreatedAt(), s.getUpdatedAt());
     }
 
+    /** Unfiltered — admin paths only (sees every linked post regardless of its own visibility/grants). */
     SeriesDetailResponse toDetail(Series series) {
-        List<SeriesPost> seriesPosts = seriesPostRepository.findBySeriesIdOrderByPositionAsc(series.getId());
-        List<SeriesPostItem> items = seriesPosts.stream()
-                .map(sp -> new SeriesPostItem(
-                        sp.getPosition(),
-                        sp.getPost().getId(),
-                        sp.getPost().getTitle(),
-                        sp.getPost().getSlug(),
-                        sp.getPost().getExcerpt(),
-                        sp.getPost().getStatus(),
-                        sp.getPost().getPublishedAt()))
+        List<SeriesPostItem> items = seriesPostRepository.findBySeriesIdOrderByPositionAsc(series.getId()).stream()
+                .map(sp -> toItem(sp, true))
                 .toList();
         return new SeriesDetailResponse(
                 series.getId(), series.getTitle(), series.getSlug(), series.getDescription(),
                 series.getStatus(), items.size(), series.getCreatedAt(), series.getUpdatedAt(), items);
+    }
+
+    private SeriesPostItem toItem(SeriesPost sp, boolean accessible) {
+        Post post = sp.getPost();
+        return new SeriesPostItem(
+                sp.getPosition(),
+                post.getId(),
+                post.getTitle(),
+                post.getSlug(),
+                post.getExcerpt(),
+                post.getStatus(),
+                post.getPublishedAt(),
+                post.getVisibility(),
+                accessible);
     }
 }

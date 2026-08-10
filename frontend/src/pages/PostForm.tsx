@@ -5,11 +5,18 @@ import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { createPost, updatePost, uploadContentImage, UnauthorizedError } from '../api';
+import {
+  createPost, updatePost, uploadContentImage, UnauthorizedError,
+  fetchAccessGroups, fetchAdminUsers, fetchPostAccessGroups, fetchPostAccessUsers,
+  setPostAccessGroups as apiSetPostAccessGroups, setPostAccessUsers as apiSetPostAccessUsers,
+} from '../api';
 import { logout } from '../auth';
 import ImageUploadButton from '../components/ImageUploadButton';
+import VideoUploadButton from '../components/VideoUploadButton';
+import YoutubeEmbedButton from '../components/YoutubeEmbedButton';
+import AttachmentManager from '../components/AttachmentManager';
 import { alignCommands } from '../components/editorCommands';
-import type { BlogPost } from '../types';
+import type { BlogPost, PostVisibility, AccessGroup, UserBrief } from '../types';
 
 const SQL_RE = /^(select|insert|update|delete|create|drop|alter|with|truncate|explain|grant|revoke|from|where)\s/i;
 const BASH_RE = /^(sudo|apt(-get)?|yum|dnf|brew|npm|yarn|pnpm|git|docker|kubectl|helm|curl|wget|ls|cd|mkdir|rmdir|rm|cp|mv|chmod|chown|grep|find|ps|kill|systemctl|service|cat|echo|export|source|python|pip|java|mvn|gradle)\s/i;
@@ -60,6 +67,32 @@ export default function PostForm({ initial, existingSlugs, onSave, onCancel }: P
   const [tags, setTags] = useState<string>((initial?.tags ?? []).join(', '));
   const [status, setStatus] = useState<'DRAFT' | 'PUBLISHED'>(initial?.status ?? 'DRAFT');
 
+  const [visibility, setVisibility] = useState<PostVisibility>(initial?.visibility ?? 'PUBLIC');
+  const [availableGroups, setAvailableGroups] = useState<AccessGroup[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<UserBrief[]>([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>([]);
+  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
+  const [userSearch, setUserSearch] = useState('');
+
+  // Load the group/user pickers only when Private is selected (avoids the
+  // extra requests for the common Public-post case).
+  useEffect(() => {
+    if (visibility !== 'PRIVATE') return;
+    fetchAccessGroups().then(setAvailableGroups).catch(() => setAvailableGroups([]));
+    fetchAdminUsers().then((users) =>
+      setAvailableUsers(users.map((u) => ({ id: u.id, username: u.username, email: u.email })))
+    ).catch(() => setAvailableUsers([]));
+  }, [visibility]);
+
+  // In edit mode, preload the post's current groups/direct users once (independent
+  // of the visibility toggle above, so switching back and forth doesn't lose the selection).
+  useEffect(() => {
+    if (!isEditMode || !initial) return;
+    fetchPostAccessGroups(initial.id).then((groups) => setSelectedGroupIds(groups.map((g) => g.id))).catch(() => {});
+    fetchPostAccessUsers(initial.id).then((users) => setSelectedUserIds(users.map((u) => u.id))).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
   const [coverImagePreview, setCoverImagePreview] = useState<string | null>(null);
   const [coverImageError, setCoverImageError] = useState<string | null>(null);
@@ -98,7 +131,7 @@ export default function PostForm({ initial, existingSlugs, onSave, onCancel }: P
       return;
     }
 
-    const payload = { title, slug: trimmedSlug, category, excerpt, content, tags: tagsArray, status };
+    const payload = { title, slug: trimmedSlug, category, excerpt, content, tags: tagsArray, status, visibility };
 
     try {
       let saved: BlogPost;
@@ -107,6 +140,14 @@ export default function PostForm({ initial, existingSlugs, onSave, onCancel }: P
       } else {
         saved = await createPost(payload, coverImageFile ?? undefined);
       }
+      // Sync access groups/users after the post itself is saved. Cleared to
+      // empty when switching back to Public, so no stale grants linger.
+      const groupIds = visibility === 'PRIVATE' ? selectedGroupIds : [];
+      const userIds = visibility === 'PRIVATE' ? selectedUserIds : [];
+      await Promise.all([
+        apiSetPostAccessGroups(saved.id, groupIds),
+        apiSetPostAccessUsers(saved.id, userIds),
+      ]);
       onSave(saved);
     } catch (err) {
       if (err instanceof UnauthorizedError) {
@@ -309,10 +350,19 @@ export default function PostForm({ initial, existingSlugs, onSave, onCancel }: P
               <label className="field__label field__label--required" htmlFor="pf-content" style={{ margin: 0 }}>
                 Content
               </label>
-              <ImageUploadButton
-                onInsert={(snippet) => setContent((prev) => prev + (prev.endsWith('\n') || !prev ? '' : '\n') + '\n' + snippet + '\n')}
-                onAuthError={() => { logout(); navigate('/admin/login'); }}
-              />
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <ImageUploadButton
+                  onInsert={(snippet) => setContent((prev) => prev + (prev.endsWith('\n') || !prev ? '' : '\n') + '\n' + snippet + '\n')}
+                  onAuthError={() => { logout(); navigate('/admin/login'); }}
+                />
+                <VideoUploadButton
+                  onInsert={(snippet) => setContent((prev) => prev + (prev.endsWith('\n') || !prev ? '' : '\n') + '\n' + snippet + '\n')}
+                  onAuthError={() => { logout(); navigate('/admin/login'); }}
+                />
+                <YoutubeEmbedButton
+                  onInsert={(snippet) => setContent((prev) => prev + (prev.endsWith('\n') || !prev ? '' : '\n') + '\n' + snippet + '\n')}
+                />
+              </span>
             </div>
             <MDEditor
               id="pf-content"
@@ -405,6 +455,90 @@ export default function PostForm({ initial, existingSlugs, onSave, onCancel }: P
               </button>
             </div>
           </div>
+
+          {/* Visibility */}
+          <div className="field">
+            <label className="field__label">Visibility</label>
+            <div className="status-toggle">
+              <button
+                type="button"
+                className={`status-toggle__option${visibility === 'PUBLIC' ? ' status-toggle__option--active-published' : ''}`}
+                onClick={() => setVisibility('PUBLIC')}
+              >
+                Public
+              </button>
+              <button
+                type="button"
+                className={`status-toggle__option${visibility === 'PRIVATE' ? ' status-toggle__option--active-draft' : ''}`}
+                onClick={() => setVisibility('PRIVATE')}
+              >
+                🔒 Private
+              </button>
+            </div>
+          </div>
+
+          {visibility === 'PRIVATE' && (
+            <div className="field field--full private-access-panel">
+              <label className="field__label">Allowed Access Groups</label>
+              {availableGroups.length === 0 ? (
+                <p className="private-access-panel__empty">
+                  No access groups yet — create one under Admin → Access Groups.
+                </p>
+              ) : (
+                <div className="checkbox-list">
+                  {availableGroups.map((group) => (
+                    <label key={group.id} className="checkbox-list__item">
+                      <input
+                        type="checkbox"
+                        checked={selectedGroupIds.includes(group.id)}
+                        onChange={(e) =>
+                          setSelectedGroupIds((prev) =>
+                            e.target.checked ? [...prev, group.id] : prev.filter((id) => id !== group.id)
+                          )
+                        }
+                      />
+                      {group.name}
+                      {!group.enabled && <span className="checkbox-list__hint"> (disabled)</span>}
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              <label className="field__label" style={{ marginTop: 16 }}>
+                Specific Users <span style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>(exception access)</span>
+              </label>
+              <input
+                className="field__input"
+                type="text"
+                placeholder="Search users by username or email..."
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                style={{ marginBottom: 8 }}
+              />
+              <div className="checkbox-list checkbox-list--scroll">
+                {availableUsers
+                  .filter((u) =>
+                    !userSearch.trim()
+                    || u.username.toLowerCase().includes(userSearch.toLowerCase())
+                    || u.email.toLowerCase().includes(userSearch.toLowerCase())
+                  )
+                  .map((user) => (
+                    <label key={user.id} className="checkbox-list__item">
+                      <input
+                        type="checkbox"
+                        checked={selectedUserIds.includes(user.id)}
+                        onChange={(e) =>
+                          setSelectedUserIds((prev) =>
+                            e.target.checked ? [...prev, user.id] : prev.filter((id) => id !== user.id)
+                          )
+                        }
+                      />
+                      {user.username} <span className="checkbox-list__hint">({user.email})</span>
+                    </label>
+                  ))}
+              </div>
+            </div>
+          )}
 
           {/* Cover Image */}
           <div className="field field--full">
@@ -508,6 +642,20 @@ export default function PostForm({ initial, existingSlugs, onSave, onCancel }: P
               </p>
             </div>
           </div>
+
+          {/* Attachments — needs a post id, so only available once the post has been saved */}
+          {isEditMode && initial ? (
+            <AttachmentManager
+              postId={initial.id}
+              initialAttachments={initial.attachments}
+              onAuthError={() => { logout(); navigate('/admin/login'); }}
+            />
+          ) : (
+            <div className="field field--full">
+              <label className="field__label">Attachments</label>
+              <p className="attachment-manager__empty">Save the post first to add attachments.</p>
+            </div>
+          )}
         </div>
 
         <div className="post-form-actions">

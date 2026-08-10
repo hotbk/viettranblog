@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { fetchAdminPosts, deletePost, updatePostStatus, UnauthorizedError } from '../api';
 import { logout } from '../auth';
+import ThemeToggle from '../components/ThemeToggle';
 import type { BlogPost } from '../types';
 import PostForm from './PostForm';
 
@@ -211,14 +212,19 @@ export default function AdminPosts() {
       <header className="admin-topbar">
         <div className="admin-topbar__inner">
           <div className="admin-topbar__brand">
-            <span className="admin-topbar__brand-name">viettran Blog</span>
+            <span className="admin-topbar__brand-name">TECH2BLOGS</span>
             <span className="admin-topbar__brand-sub">Admin Panel</span>
           </div>
           <div className="admin-topbar__actions">
+            <ThemeToggle />
             <Link to="/admin/exams" className="admin-topbar__view-site">Exams</Link>
             <Link to="/admin/attempts" className="admin-topbar__view-site">Attempts</Link>
             <Link to="/admin/series" className="admin-topbar__view-site">Series</Link>
             <Link to="/admin/users" className="admin-topbar__view-site">Users</Link>
+            <Link to="/admin/access-groups" className="admin-topbar__view-site">Access Groups</Link>
+            <Link to="/admin/access-requests" className="admin-topbar__view-site">Access Requests</Link>
+            <Link to="/admin/about" className="admin-topbar__view-site">About</Link>
+            <Link to="/admin/books" className="admin-topbar__view-site">Books</Link>
             <Link to="/" className="admin-topbar__view-site">View site &rarr;</Link>
             <button className="btn--topbar-logout" onClick={handleLogout}>
               Sign out
@@ -365,6 +371,7 @@ export default function AdminPosts() {
                   <tr>
                     <th>Title</th>
                     <th>Category</th>
+                    <th>Visibility</th>
                     <th>Status</th>
                     <th>Published</th>
                     <th>Views</th>
@@ -379,6 +386,9 @@ export default function AdminPosts() {
                         <div className="post-title-cell__slug">{post.slug}</div>
                       </td>
                       <td>{post.category || <span style={{ color: 'var(--color-text-light)' }}>—</span>}</td>
+                      <td>
+                        <VisibilityBadge visibility={post.visibility} accessGroupCount={post.accessGroupCount} />
+                      </td>
                       <td>
                         <div className="row-status-toggle">
                           <button
@@ -398,7 +408,7 @@ export default function AdminPosts() {
                         </div>
                       </td>
                       <td style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>
-                        {formatDate(post.publishedAt)}
+                        {post.status === 'PUBLISHED' ? formatDate(post.publishedAt) : '—'}
                       </td>
                       <td style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>
                         {(post.viewCount ?? 0).toLocaleString()}
@@ -506,6 +516,20 @@ function StatusBadge({ status }: { status: 'DRAFT' | 'PUBLISHED' }) {
   return (
     <span className={`badge ${status === 'PUBLISHED' ? 'badge--published' : 'badge--draft'}`}>
       {status}
+    </span>
+  );
+}
+
+function VisibilityBadge({ visibility, accessGroupCount }: { visibility: 'PUBLIC' | 'PRIVATE'; accessGroupCount?: number | null }) {
+  if (visibility === 'PUBLIC') {
+    return <span className="badge badge--public">Public</span>;
+  }
+  return (
+    <span className="badge badge--private" title="Private post">
+      🔒 Private
+      {accessGroupCount != null && accessGroupCount > 0 && (
+        <span className="badge__count"> · {accessGroupCount} group{accessGroupCount === 1 ? '' : 's'}</span>
+      )}
     </span>
   );
 }
