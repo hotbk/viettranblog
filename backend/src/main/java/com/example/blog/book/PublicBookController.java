@@ -1,6 +1,7 @@
 package com.example.blog.book;
 
 import com.example.blog.access.BookAccessService;
+import com.example.blog.common.ContentLanguage;
 import com.example.blog.common.NotFoundException;
 import com.example.blog.user.User;
 import jakarta.validation.Valid;
@@ -39,8 +40,9 @@ public class PublicBookController {
     @GetMapping("/api/books")
     public List<BookResponse> list(@RequestParam(required = false) String q,
                                     @RequestParam(required = false) String category,
-                                    @RequestParam(required = false) BookFileType fileType) {
-        return bookService.search(q, category, fileType, false);
+                                    @RequestParam(required = false) BookFileType fileType,
+                                    @RequestParam(required = false) ContentLanguage language) {
+        return bookService.search(q, category, fileType, false, language);
     }
 
     @GetMapping("/api/books/{slug}")

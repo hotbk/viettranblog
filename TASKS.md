@@ -393,6 +393,152 @@ package into the eager bundle (the `react-pdf` lazy chunk stayed the same
 
 ---
 
+### TASK-BE-016 — Dual-language content (VI/EN), backend (DONE)
+
+Owner agent: `backend-agent`
+
+Full design: `docs/10-multilingual-content.md`. Reverses the "Multilingual
+content" out-of-scope line in `docs/01-prd.md` §6 (2026-08-10 decision).
+
+Scope: each language is a full separate `Post`/`Book` row, linked by a bare
+`translation_group_id` correlation column (no new table, no self-FK — see
+docs/10 §1.3). Existing content back-fills to `VI` (all current posts/books
+are Vietnamese, per product decision). Six new columns on `Post` and `Book`;
+access-group/direct-grant writes become group-aware so one config covers
+every language variant (docs/10 §2); sitemap gains `hreflang` alternates;
+related posts, series, book highlights/reading-progress, and `DataSeeder`
+each get a small language-aware adjustment (docs/10 §7).
+
+Sub-tasks (docs/10 §9, BE-L1 through BE-L7): migration `V4__add_content_language.sql`
++ entities; read-side DTOs/filtering; access-group propagation (acceptance
+gate: PRIVATE + group grant on the VI row denies a non-granted MEMBER on the
+EN slug — R2 in docs/10 §8); admin translation-link/unlink + mark-reviewed
+endpoints; sitemap hreflang; feature-interaction touches; full test matrix.
+
+Test command:
+
+```bash
+cd backend && mvn test
+```
+
+Result: `mvn test` → 142/142 passing (23 new — see
+`backend/src/test/java/.../PostServiceMultilingualTest.java`,
+`PostTranslationAccessControllerTest.java` (the R2 acceptance test),
+`BookServiceMultilingualTest.java`, `SeriesLanguageGuardTest.java`, and 3 new
+cases in `SitemapControllerTest.java`). `V4` applied cleanly against the real
+dev Postgres (`ddl-auto: validate` passed on boot) and was smoke-tested live:
+language filter, detail `translations`, and reciprocal sitemap hreflang
+alternates all confirmed against a real VI/EN post pair.
+
+Two implementation notes not in the design doc:
+- `translation_group_id`'s own-id fixup (needed because the id isn't known
+  before the first INSERT under `IDENTITY` generation) is done once, in
+  `Post`/`Book`'s `@PostPersist` callback — not duplicated in every service
+  method that creates a row. This also transparently fixed a latent test-data
+  hazard: several pre-existing tests construct `Post`/`Book` via `new Post()`
+  directly (bypassing the service layer), and without this fix they would all
+  default to `translationGroupId = 0` and be silently treated as one giant
+  translation group by the sitemap/admin-listing grouping logic.
+- `POST/PUT /api/posts` (not `/api/admin/posts`) gained the `language`/
+  `translationOfPostId` params — plain post CRUD lives at `/api/posts`
+  (ADMIN+EDITOR) in this codebase, unlike Book's `/api/admin/books`
+  convention the design doc assumed for both. `PUT
+  /api/admin/posts/{id}/translation-link` and `.../translation-reviewed` do
+  live under `/api/admin/posts` as designed (ADMIN-only, matching §11
+  assumption 7).
+
+Known gap going in (see docs/10 §11): which language existing content is has
+been answered (VI) — the `V4` back-fill can proceed without a manual per-row
+list.
+
+Not implemented here (separate tickets, per task boundary): `TASK-FE-008`
+(frontend — no `frontend/src/api.ts` changes), `TASK-BE-017`/`TASK-FE-009`
+(machine translation, Phase 2).
+
+---
+
+### TASK-FE-008 — Dual-language content (VI/EN), frontend (NOT STARTED)
+
+Owner agent: `frontend-agent`
+
+Depends on `TASK-BE-016` (needs live endpoints). Full design:
+`docs/10-multilingual-content.md` §4, §9 (FE-L1 through FE-L6).
+
+Scope: language types + API client; a `contentLanguage.ts` preference
+(`localStorage`, one-time `navigator.language` seed, VI/EN/ALL) with a header
+control, wired into the home list and `LibraryPage`'s filtering + empty
+state; a real `<Link>`-based language switcher on `PostDetail`/`BookDetailPage`
+(explicitly not in `BookReaderPage`'s toolbar); `useSeo` gains `lang` +
+`alternates` (`<link rel="alternate" hreflang>`, `document.documentElement.lang`,
+`og:locale`) — must remove previously-appended alternate tags before adding
+new ones on each navigation (R6 in docs/10 §8, a real bug already present in
+`useSeo.ts`'s single-element upsert pattern); a Translations panel in
+`PostForm.tsx`/`AdminBookForm.tsx` plus language/stale badges on the admin
+list pages.
+
+Test command:
+
+```bash
+cd frontend && npm run lint && npm run typecheck && npm run build
+```
+
+Known gap accepted going in (see docs/10 §4.6, §11): UI chrome (nav, buttons,
+empty-state copy) is not translated in Phase 1 — a VI reader on a VI article
+still sees English UI text. Full UI i18n is a separately-sized task, not
+bundled here.
+
+---
+
+### TASK-BE-017 — Machine-assisted translation, backend (NOT STARTED)
+
+Owner agent: `backend-agent`
+
+Depends on `TASK-BE-016`. Full design: `docs/10-multilingual-content.md` §6,
+§9 (BE-T1 through BE-T3). Phase 2 — deferred until Phase 1 ships.
+
+Scope: `MachineTranslationService` (one class, no provider interface) calling
+the Anthropic Messages API by default (named choice, docs/10 §6.1 — Google
+Cloud Translation v3 as the documented fallback); `POST
+/api/admin/posts/{id}/machine-translate`, output is always a DRAFT with
+`translation_origin = MACHINE`, never auto-published; input size cap; PDF
+books explicitly return `400 TRANSLATION_NOT_SUPPORTED_FOR_FILE_TYPE` (TXT
+books are supported but capped — docs/10 §6.5 frames this honestly as "a Post
+feature more than a Book one"). Blank API key → `503
+TRANSLATION_NOT_CONFIGURED`, not a crash.
+
+Test command:
+
+```bash
+cd backend && mvn test
+```
+
+---
+
+### TASK-FE-009 — Machine-assisted translation, frontend (NOT STARTED)
+
+Owner agent: `frontend-agent`
+
+Depends on `TASK-BE-017`. Full design: `docs/10-multilingual-content.md` §6,
+§9 (FE-T1).
+
+Scope: "Machine translate" action in the Translations panel with a
+confirmation dialog stating the output is an unreviewed draft; distinct
+error states for not-configured (button hidden)/too-long/provider-failed;
+on success, navigates to the new draft's edit form for review.
+
+Test command:
+
+```bash
+cd frontend && npm run lint && npm run typecheck && npm run build
+```
+
+Known open product decision (docs/10 §11, not yet answered): should a
+machine-translated article visibly disclose that origin to readers? Data
+model already captures `translation_origin` either way — this only affects
+whether it's ever rendered.
+
+---
+
 ### TASK-DEVOPS-001 — CI and local dev flow
 
 Owner agent: `devops-agent`

@@ -1495,3 +1495,92 @@ Known gaps carried forward:
 - `docs/04-api-contract.md` still missing §13+ for six endpoint groups
   (book highlights, access requests, audit log, sitemap, register/me, admin
   user management) — flagged in the previous entry, not addressed here.
+
+---
+
+### 2026-08-10 — TASK-BE-016: Dual-language content (VI/EN), backend
+
+(Note: this entry was written on a branch cut directly from `main`, before
+the separate `feat/book-highlights-frontend-wiring` branch — which has its
+own "Book highlights: frontend was never actually wired in" memory entry —
+had merged. That entry isn't duplicated here; it'll arrive via its own PR.)
+
+Summary: Implemented BE-L1 through BE-L7 of `docs/10-multilingual-content.md`
+in full. Each language is a full separate `Post`/`Book` row linked by a plain
+`translation_group_id` correlation column (no FK, no new table — docs/10
+§1.3). `visibility`/access-group/direct-user grants are group-level,
+propagated at write time; `status` is deliberately per-row. Sitemap gained
+reciprocal `hreflang` alternates. Full details, deviations, and file list are
+in the `TASK-BE-016` entry in `TASKS.md` — not repeated here.
+
+Files touched (summary): `backend/src/main/resources/db/migration/V4__add_content_language.sql`
+(new); `common/ContentLanguage.java`, `TranslationOrigin.java`,
+`TranslationLanguageTakenException.java`, `TranslationLinkRequest.java` (all
+new); `post/Post.java`, `PostRepository.java`, `PostRequest.java`,
+`PostResponse.java`, `PostService.java`, `PostController.java`,
+`AdminPostController.java`, `DataSeeder.java`; the identical set for
+`book/Book*.java`, `BookService.java`, `PublicBookController.java`,
+`AdminBookController.java`; `access/AccessGroupService.java` (5 methods made
+group-aware), `AccessRequestService.java` (duplicate-request guard widened);
+`series/SeriesService.java` (`SERIES_LANGUAGE_MISMATCH` write-time guard);
+`book/MyBookHighlightResponse.java`, `BookHighlightService.java`
+(`bookLanguage`); `seo/SitemapController.java` (hreflang); `common/GlobalExceptionHandler.java`.
+Docs: `docs/04-api-contract.md` §13 (new), `docs/03-architecture.md` §4.1/§4.2/§4.5,
+`TASKS.md`.
+
+Tests/checks run:
+- `mvn test` → 142/142 passing (119 pre-existing + 23 new).
+- Booted `mvn spring-boot:run -Dspring-boot.run.profiles=dev` against the real
+  dev Postgres (`personal-blog-postgres`, not H2): `V4` applied cleanly,
+  `ddl-auto: validate` passed on startup (the thing H2-backed CI structurally
+  cannot check — see the two entries below this one from earlier today).
+  Live-verified via `curl`: `GET /api/posts?language=EN`, a post detail's
+  `translations` array (both directions of a real VI/EN pair), and
+  `/api/sitemap.xml`'s reciprocal `hreflang` alternates + `x-default`, all
+  correct against real data. Confirmed `psql`: new columns, both new unique
+  indexes, and `DataSeeder`'s new VI/EN demo pair all present as expected.
+
+Decisions / deviations from `docs/10-multilingual-content.md` (flagged
+in-line in the doc's own §9 spirit — the doc author worked from a snapshot):
+1. **`translation_group_id`'s self-fixup lives in `@PostPersist`, not in
+   every service method.** The doc's §1.3 describes "save(), then
+   setTranslationGroupId(getId())" as if the first insert could carry `NULL`
+   — impossible under a `NOT NULL` column with `IDENTITY` generation (the
+   insert needs a value before the id exists). Resolved with a non-null
+   placeholder (`0`, primitive `long` default) fixed up in the entity's
+   `@PostPersist` callback via Hibernate dirty-checking — centralizes the fix
+   for every creation path, not just `PostService.create`. This incidentally
+   fixed a real latent bug: several pre-existing tests construct
+   `Post`/`Book` directly (`new Post()`), which would otherwise all default to
+   `translationGroupId = 0` and be treated as one giant false translation
+   group by the sitemap/listing grouping logic — caught by a new sitemap test
+   failing during development, not by inspection.
+2. **`POST/PUT /api/posts` gained the language params, not `/api/admin/posts`.**
+   Plain post CRUD lives at `/api/posts` (ADMIN+EDITOR) in this codebase; only
+   Book has a true `/api/admin/books` create/update convention. The design
+   doc's §3.2 table assumed the Book-style path for both. The admin-only
+   `translation-link`/`translation-reviewed` endpoints do live under
+   `/api/admin/posts` as designed.
+3. **Post's admin listing carries the full `translations` array (incl. DRAFT
+   siblings) and `translationStale`, not just on a "detail" call** — Post has
+   no separate `GET /api/admin/posts/{id}` (Book does), so the admin listing
+   (which already returns full content per row) is the closest thing to a
+   detail surface Post has. A deliberate, documented deviation from docs/10
+   §3.1's "never on listings" rule, scoped to the admin-only listing only
+   (public listings still carry no `translations`, as designed).
+4. **`AccessRequestService`'s widened duplicate-pending guard still throws
+   `REQUEST_ALREADY_PENDING`** rather than returning the existing request as
+   docs/10 §2.4 suggested — kept the existing single-post error-based
+   contract rather than introducing a new "return existing" response shape,
+   since the doc itself calls this a minor optional wrinkle.
+5. Flyway numbering matched the design doc's assumption (`V4` was in fact the
+   next free version — `V1`–`V3` already existed, confirmed via `ls` before
+   writing the migration), so no renumbering was needed despite the task
+   brief's warning that V2/V3 might have shifted this.
+
+Known gaps / follow-ups: `TASK-FE-008` (frontend) not started —
+`frontend/src/api.ts` sends/reads none of these new fields yet, so none of
+this is reachable from the UI. `TASK-BE-017`/`TASK-FE-009` (machine
+translation) not started, Phase 2 per the design doc. The new admin
+`translations`/`translationStale` fields are not yet covered by a dedicated
+"drift" UI (that's `AdminPosts.tsx`/`AdminBooks.tsx` badges in `FE-L5`).

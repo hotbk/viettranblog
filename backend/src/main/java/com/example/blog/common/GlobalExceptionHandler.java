@@ -5,6 +5,7 @@ import com.example.blog.access.DenialReason;
 import com.example.blog.access.PostAccessDeniedException;
 import com.example.blog.book.BookNotDownloadableException;
 import com.example.blog.video.VideoProcessingException;
+import java.util.Set;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +16,14 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    // Domain-specific IllegalArgumentException messages that should surface as
+    // their own `code` rather than the generic BAD_REQUEST fallback — see
+    // docs/10-multilingual-content.md §3.2 (NOT_A_TRANSLATION) and §7.4
+    // (SERIES_LANGUAGE_MISMATCH).
+    private static final Set<String> DOMAIN_CODED_BAD_REQUESTS = Set.of(
+            "NOT_A_TRANSLATION", "SERIES_LANGUAGE_MISMATCH");
+
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ApiError> handleNotFound(NotFoundException exception) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -51,6 +60,15 @@ public class GlobalExceptionHandler {
                 .body(new ApiError("BOOK_NOT_DOWNLOADABLE", "This book is not available for download"));
     }
 
+    // Two rows of the same language in one translation group — R8 in
+    // docs/10-multilingual-content.md §8, the constraint UNIQUE(translation_group_id,
+    // language) exists to prevent.
+    @ExceptionHandler(TranslationLanguageTakenException.class)
+    public ResponseEntity<ApiError> handleTranslationLanguageTaken(TranslationLanguageTakenException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiError("TRANSLATION_LANGUAGE_TAKEN", exception.getMessage()));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException exception) {
         String message = exception.getBindingResult().getFieldErrors().stream()
@@ -75,6 +93,10 @@ public class GlobalExceptionHandler {
         }
         if ("INVALID_HIGHLIGHT_ANCHOR".equals(msg) || "HIGHLIGHT_TEXT_TOO_LONG".equals(msg)
                 || "HIGHLIGHT_NOTE_TOO_LONG".equals(msg)) {
+            return ResponseEntity.badRequest().body(new ApiError(msg, msg));
+        }
+        // Dual-language content (docs/10-multilingual-content.md §3.2, §7.4).
+        if (DOMAIN_CODED_BAD_REQUESTS.contains(msg)) {
             return ResponseEntity.badRequest().body(new ApiError(msg, msg));
         }
         return ResponseEntity.badRequest().body(new ApiError("BAD_REQUEST", msg));

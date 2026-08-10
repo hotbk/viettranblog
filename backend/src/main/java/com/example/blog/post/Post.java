@@ -1,5 +1,7 @@
 package com.example.blog.post;
 
+import com.example.blog.common.ContentLanguage;
+import com.example.blog.common.TranslationOrigin;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -7,6 +9,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PostPersist;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -73,6 +76,43 @@ public class Post {
     @Column(nullable = false, columnDefinition = "bigint default 0")
     private long viewCount = 0;
 
+    // --- Dual-language content (docs/10-multilingual-content.md §1) ---
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 5, columnDefinition = "varchar(5) default 'VI'")
+    private ContentLanguage language = ContentLanguage.VI;
+
+    // Correlation id for "which posts are the same article in another
+    // language" — plain column, deliberately no FK (docs/10 §1.3). NOT NULL
+    // in the DB (post-backfill), but a brand-new standalone row cannot know
+    // its own id before the first INSERT (IDENTITY generation), so this
+    // starts at the placeholder 0 and the service layer fixes it up to the
+    // row's own id in the same transaction right after the first save —
+    // never visible outside that transaction (MVCC). A row joining an
+    // existing group at creation time sets this directly to the target's
+    // group id and never needs the fixup.
+    @Column(name = "translation_group_id", nullable = false)
+    private long translationGroupId;
+
+    // The row this was translated from; null = original. Deliberately not a
+    // FK (docs/10 §1.3) — may dangle after the source is deleted, which the
+    // service layer treats as "this row is now the original" (R9).
+    @Column(name = "translated_from_id")
+    private Long translatedFromId;
+
+    // Source row's updatedAt when this translation was last reviewed; drives
+    // `translationStale` (source.updatedAt > sourceUpdatedAt), computed on
+    // read and never stored as a boolean. Set at creation/link time and by
+    // the explicit "mark reviewed" action only — never as a side effect of a
+    // plain save (docs/10 §3.3).
+    @Column(name = "source_updated_at")
+    private Instant sourceUpdatedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "translation_origin", nullable = false, length = 10,
+            columnDefinition = "varchar(10) default 'HUMAN'")
+    private TranslationOrigin translationOrigin = TranslationOrigin.HUMAN;
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();
@@ -80,6 +120,26 @@ public class Post {
         updatedAt = now;
         if (status == PostStatus.PUBLISHED && publishedAt == null) {
             publishedAt = now;
+        }
+    }
+
+    /**
+     * Fixes up translation_group_id to this row's own id for a brand-new
+     * standalone row (docs/10-multilingual-content.md §1.3) — the id cannot be
+     * known before the first INSERT (IDENTITY generation), so callers that
+     * don't explicitly join an existing group leave this at the default 0,
+     * and it's fixed up here, in one place, for every creation path (not just
+     * PostService.create). At this point the entity is managed with its
+     * generated id already assigned; Hibernate's dirty checking picks up this
+     * mutation and flushes it as one extra UPDATE, never visible outside the
+     * current transaction (MVCC). A row joining an existing group at creation
+     * time already has a non-zero translationGroupId set before persist and
+     * is left untouched.
+     */
+    @PostPersist
+    void assignTranslationGroupId() {
+        if (translationGroupId == 0) {
+            translationGroupId = id;
         }
     }
 
@@ -127,4 +187,14 @@ public class Post {
     public void setCoverImageSize(Long coverImageSize) { this.coverImageSize = coverImageSize; }
     public long getViewCount() { return viewCount; }
     public void setViewCount(long viewCount) { this.viewCount = viewCount; }
+    public ContentLanguage getLanguage() { return language; }
+    public void setLanguage(ContentLanguage language) { this.language = language; }
+    public long getTranslationGroupId() { return translationGroupId; }
+    public void setTranslationGroupId(long translationGroupId) { this.translationGroupId = translationGroupId; }
+    public Long getTranslatedFromId() { return translatedFromId; }
+    public void setTranslatedFromId(Long translatedFromId) { this.translatedFromId = translatedFromId; }
+    public Instant getSourceUpdatedAt() { return sourceUpdatedAt; }
+    public void setSourceUpdatedAt(Instant sourceUpdatedAt) { this.sourceUpdatedAt = sourceUpdatedAt; }
+    public TranslationOrigin getTranslationOrigin() { return translationOrigin; }
+    public void setTranslationOrigin(TranslationOrigin translationOrigin) { this.translationOrigin = translationOrigin; }
 }

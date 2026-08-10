@@ -3,6 +3,7 @@ package com.example.blog.post;
 import com.example.blog.access.AccessGroupBrief;
 import com.example.blog.access.AccessGroupService;
 import com.example.blog.access.UserBrief;
+import com.example.blog.common.TranslationLinkRequest;
 import com.example.blog.user.UserService;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -37,7 +38,20 @@ public class AdminPostController {
 
     @GetMapping
     public List<PostResponse> listAll() {
-        return postService.search(null, null, true);
+        return postService.search(null, null, true, null);
+    }
+
+    // --- dual-language content (docs/10-multilingual-content.md §3.2) ---
+
+    @PutMapping("/{id}/translation-link")
+    public PostResponse linkTranslation(@PathVariable Long id, @RequestBody TranslationLinkRequest request) {
+        return postService.linkTranslation(id, request.targetId());
+    }
+
+    @PostMapping("/{id}/translation-reviewed")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void markTranslationReviewed(@PathVariable Long id) {
+        postService.markTranslationReviewed(id);
     }
 
     // --- attachments (PDF/DOC/DOCX/TXT) ---

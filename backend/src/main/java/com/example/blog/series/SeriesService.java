@@ -127,10 +127,16 @@ public class SeriesService {
                 .orElseThrow(() -> new NotFoundException("SERIES_NOT_FOUND", "Series not found"));
 
         List<Long> postIds = req.postIds() == null ? List.of() : req.postIds();
-        for (Long postId : postIds) {
-            if (!postRepository.existsById(postId)) {
-                throw new IllegalArgumentException("Post not found: " + postId);
-            }
+        List<Post> requestedPosts = postIds.stream()
+                .map(postId -> postRepository.findById(postId)
+                        .orElseThrow(() -> new IllegalArgumentException("Post not found: " + postId)))
+                .toList();
+        // A series is single-language, enforced at write time rather than by a
+        // schema change (docs/10-multilingual-content.md §7.4) — a mixed-language
+        // series would produce a prev/next link that jumps language mid-read.
+        long distinctLanguages = requestedPosts.stream().map(Post::getLanguage).distinct().count();
+        if (distinctLanguages > 1) {
+            throw new IllegalArgumentException("SERIES_LANGUAGE_MISMATCH");
         }
 
         seriesPostRepository.deleteBySeriesId(id);

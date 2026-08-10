@@ -1,5 +1,6 @@
 package com.example.blog.post;
 
+import com.example.blog.common.ContentLanguage;
 import java.util.List;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -32,8 +33,9 @@ public class PostController {
 
     @GetMapping
     public List<PostResponse> search(@RequestParam(required = false) String q,
-                                     @RequestParam(required = false) String category) {
-        return postService.search(q, category, false);
+                                     @RequestParam(required = false) String category,
+                                     @RequestParam(required = false) ContentLanguage language) {
+        return postService.search(q, category, false, language);
     }
 
     @GetMapping("/{slug}")
@@ -59,11 +61,13 @@ public class PostController {
             @RequestParam PostStatus status,
             @RequestParam(defaultValue = "PUBLIC") PostVisibility visibility,
             @RequestParam(required = false) PostMetadataVisibility privateMetadataVisibility,
-            @RequestPart(required = false) MultipartFile coverImage) {
+            @RequestPart(required = false) MultipartFile coverImage,
+            @RequestParam(required = false) ContentLanguage language,
+            @RequestParam(required = false) Long translationOfPostId) {
 
         List<String> tagList = parseTags(tags);
         PostRequest request = new PostRequest(title, slug, excerpt, content, category, tagList, status,
-                visibility, privateMetadataVisibility);
+                visibility, privateMetadataVisibility, language, translationOfPostId);
         return postService.create(request, coverImage);
     }
 
@@ -80,11 +84,12 @@ public class PostController {
             @RequestParam(defaultValue = "PUBLIC") PostVisibility visibility,
             @RequestParam(required = false) PostMetadataVisibility privateMetadataVisibility,
             @RequestPart(required = false) MultipartFile coverImage,
-            @RequestParam(required = false, defaultValue = "false") boolean removeCoverImage) {
+            @RequestParam(required = false, defaultValue = "false") boolean removeCoverImage,
+            @RequestParam(required = false) ContentLanguage language) {
 
         List<String> tagList = parseTags(tags);
         PostRequest request = new PostRequest(title, slug, excerpt, content, category, tagList, status,
-                visibility, privateMetadataVisibility);
+                visibility, privateMetadataVisibility, language, null);
         return postService.update(id, request, coverImage, removeCoverImage);
     }
 

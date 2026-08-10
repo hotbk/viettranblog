@@ -60,7 +60,18 @@ public class AccessRequestService {
         if (postAccessService.canRead(user, post)) {
             throw new IllegalArgumentException("ALREADY_HAS_ACCESS");
         }
-        if (accessRequestRepository.existsByUserIdAndPostIdAndStatus(userId, post.getId(), AccessRequestStatus.PENDING)) {
+        // Widened to the whole translation group (docs/10-multilingual-content.md
+        // §2.4): a member can otherwise open a PENDING request on the VI row and
+        // another on the EN row for what is one decision (approval is
+        // group-wide anyway, since it grants through the now group-aware
+        // AccessGroupService methods).
+        List<Long> groupPostIds = postRepository.findByTranslationGroupId(post.getTranslationGroupId()).stream()
+                .map(Post::getId)
+                .toList();
+        boolean alreadyPending = groupPostIds.stream()
+                .anyMatch(pid -> accessRequestRepository.existsByUserIdAndPostIdAndStatus(
+                        userId, pid, AccessRequestStatus.PENDING));
+        if (alreadyPending) {
             throw new IllegalArgumentException("REQUEST_ALREADY_PENDING");
         }
 

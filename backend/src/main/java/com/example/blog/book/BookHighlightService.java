@@ -105,7 +105,8 @@ public class BookHighlightService {
                 .filter(h -> bookAccessService.canRead(user, h.getBook()))
                 .limit(limit)
                 .map(h -> new MyBookHighlightResponse(
-                        toResponse(h), h.getBook().getTitle(), h.getBook().getSlug(), h.getBook().getFileType()))
+                        toResponse(h), h.getBook().getTitle(), h.getBook().getSlug(), h.getBook().getFileType(),
+                        h.getBook().getLanguage()))
                 .toList();
     }
 

@@ -1,5 +1,7 @@
 package com.example.blog.book;
 
+import com.example.blog.common.ContentLanguage;
+import com.example.blog.common.TranslationOrigin;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -7,6 +9,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PostPersist;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -93,6 +96,27 @@ public class Book {
 
     private Instant publishedAt;
 
+    // --- Dual-language content (docs/10-multilingual-content.md §1) ---
+    // Identical shape/rationale to the Post fields of the same name.
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 5, columnDefinition = "varchar(5) default 'VI'")
+    private ContentLanguage language = ContentLanguage.VI;
+
+    @Column(name = "translation_group_id", nullable = false)
+    private long translationGroupId;
+
+    @Column(name = "translated_from_id")
+    private Long translatedFromId;
+
+    @Column(name = "source_updated_at")
+    private Instant sourceUpdatedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "translation_origin", nullable = false, length = 10,
+            columnDefinition = "varchar(10) default 'HUMAN'")
+    private TranslationOrigin translationOrigin = TranslationOrigin.HUMAN;
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();
@@ -100,6 +124,14 @@ public class Book {
         updatedAt = now;
         if (status == BookStatus.PUBLISHED && publishedAt == null) {
             publishedAt = now;
+        }
+    }
+
+    /** Mirrors Post.assignTranslationGroupId exactly — see its javadoc for the full reasoning. */
+    @PostPersist
+    void assignTranslationGroupId() {
+        if (translationGroupId == 0) {
+            translationGroupId = id;
         }
     }
 
@@ -153,4 +185,14 @@ public class Book {
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
     public Instant getPublishedAt() { return publishedAt; }
     public void setPublishedAt(Instant publishedAt) { this.publishedAt = publishedAt; }
+    public ContentLanguage getLanguage() { return language; }
+    public void setLanguage(ContentLanguage language) { this.language = language; }
+    public long getTranslationGroupId() { return translationGroupId; }
+    public void setTranslationGroupId(long translationGroupId) { this.translationGroupId = translationGroupId; }
+    public Long getTranslatedFromId() { return translatedFromId; }
+    public void setTranslatedFromId(Long translatedFromId) { this.translatedFromId = translatedFromId; }
+    public Instant getSourceUpdatedAt() { return sourceUpdatedAt; }
+    public void setSourceUpdatedAt(Instant sourceUpdatedAt) { this.sourceUpdatedAt = sourceUpdatedAt; }
+    public TranslationOrigin getTranslationOrigin() { return translationOrigin; }
+    public void setTranslationOrigin(TranslationOrigin translationOrigin) { this.translationOrigin = translationOrigin; }
 }
