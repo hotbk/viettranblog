@@ -122,25 +122,67 @@ Response:
 
 ### POST `/posts`
 
-Request:
+**Auth:** Bearer token, role `ADMIN` or `EDITOR` (`POST /api/auth/login` first).
+**Content-Type:** `multipart/form-data` — not JSON. This is the #1 thing an
+external publishing tool gets wrong on this endpoint.
 
-```json
-{
-  "title": "First Post",
-  "slug": "first-post",
-  "excerpt": "Short intro",
-  "content": "Full content",
-  "category": "Technology",
-  "tags": ["react", "spring"],
-  "status": "PUBLISHED"
-}
-```
+Fields (`@RequestParam`/`@RequestPart`, not a JSON body):
+
+| Field | Type | Required | Notes |
+|---|---|---:|---|
+| `title` | string | yes | |
+| `slug` | string | yes | Must be unique (`409`/`400 Slug already exists` otherwise). No format validation server-side — send a URL-safe slug (lowercase, hyphens, no spaces/diacritics) yourself. |
+| `excerpt` | string | no | Plain text, ~150–160 chars recommended (used as the SEO meta description and card summary). |
+| `content` | string | yes | **Markdown**, rendered via `react-markdown` + `rehype-raw` (raw HTML passthrough is allowed, but there is **no** `remark-gfm` — GFM-only syntax like `~~strikethrough~~`, tables, or task lists is *not* guaranteed to render; wrap those in raw HTML `<table>`/`<del>` if you need them). See "Content formatting rules" below. |
+| `category` | string | no | Free text, not a fixed enum. |
+| `tags` | string | no | **Comma-separated**, not a JSON array (e.g. `"react,spring,postgres"`) — split/trimmed server-side. |
+| `status` | `DRAFT` \| `PUBLISHED` | yes | |
+| `visibility` | `PUBLIC` \| `PRIVATE` | no | Default `PUBLIC`. |
+| `privateMetadataVisibility` | `PUBLIC_METADATA` \| `AUTHORIZED_ONLY` | no | Only meaningful when `visibility=PRIVATE`. |
+| `coverImage` | file part | no | JPEG/PNG/WebP, max 2 MB. Send as a real multipart file part, not a URL. |
+| `language` | `VI` \| `EN` | no | Default `VI`. See `docs/10-multilingual-content.md` / §13 below for the dual-language model. |
+| `translationOfPostId` | integer | no | Create-only. Links this post into an existing post's translation group. |
+
+Response: `201 Created`, body = the created post (`PostResponse` — same shape
+as [Get Post By Slug](#3-get-post-by-slug), plus the fields listed in §13).
 
 ## 5. Update Post
 
 ### PUT `/posts/{id}`
 
-Same request body as create.
+**Auth:** same as create. **Content-Type:** `multipart/form-data`, same
+field set as create, plus:
+
+| Field | Type | Required | Notes |
+|---|---|---:|---|
+| `removeCoverImage` | boolean | no | Default `false`. Set `true` to clear an existing cover image when not also sending a new `coverImage` part. |
+
+`translationOfPostId` is **not** accepted on update (create-only — use
+`PUT /api/admin/posts/{id}/translation-link` to change group membership on an
+existing row instead). Changing `language` to one already taken by a sibling
+in the same group returns `409 TRANSLATION_LANGUAGE_TAKEN`.
+
+## 5a. Upload a Content Image (embedded in post body)
+
+### POST `/api/admin/images`
+
+**Auth:** Bearer token, `ADMIN`/`EDITOR`. **Content-Type:** `multipart/form-data`,
+one file part named `file`. JPEG/PNG/WebP/GIF, max 5 MB.
+
+This is how an image gets embedded **inside** `content` — there is no way to
+attach binary image data directly to the post body. The two-step flow for a
+publishing tool is:
+
+1. `POST /api/admin/images` with the image file → get back
+   `{ "id": "...", "url": "/api/images/{id}" }`.
+2. Reference that `url` in the post's Markdown `content` as a normal image,
+   e.g. `![alt text](/api/images/abc123)` (or the fully-qualified URL,
+   `https://<host>/api/images/abc123`) — **never** a local file path or a
+   `data:` URI; those will not resolve for readers.
+
+`GET /api/images/{id}` (public, no auth) serves the raw bytes — this is what
+actually renders in the browser, so double-check the `url` you embed matches
+exactly what step 1 returned, including the `/api/` prefix.
 
 ## 6. Update Post Status
 
@@ -572,10 +614,9 @@ DRAFT siblings) on every row, not just on a detail call.
 - `GET /api/me/highlights` rows gain `bookLanguage`.
 - `GET /api/me/reading` rows already carry `language` (part of `BookResponse`).
 
-### Not yet implemented (frontend / Phase 2)
+### Not yet implemented (Phase 2)
 
 `TASK-FE-008` (frontend: language preference, switcher, SEO head, admin
-Translations panel) and `TASK-BE-017`/`TASK-FE-009` (machine-assisted
-translation) are separate, not-yet-started tickets — see `TASKS.md`. The
-frontend API client (`frontend/src/api.ts`) does not yet send/read any of the
-fields above.
+Translations panel) is done as of 2026-08-10 — `frontend/src/api.ts` sends/
+reads all the fields above. `TASK-BE-017`/`TASK-FE-009` (machine-assisted
+translation) remain separate, not-yet-started tickets — see `TASKS.md`.
