@@ -1,8 +1,13 @@
 package com.example.blog.post;
 
+import com.example.blog.access.AccessGroupBrief;
+import com.example.blog.access.AccessGroupService;
 import com.example.blog.access.PostAccessGroupRepository;
 import com.example.blog.access.PostAccessService;
+import com.example.blog.access.UserBrief;
+import com.example.blog.common.ContentLanguage;
 import com.example.blog.common.NotFoundException;
+import com.example.blog.common.TranslationLanguageTakenException;
 import com.example.blog.series.SeriesPost;
 import com.example.blog.series.SeriesPostRepository;
 import com.example.blog.user.User;
@@ -39,15 +44,17 @@ public class PostService {
     private final PostAccessService postAccessService;
     private final PostAccessGroupRepository postAccessGroupRepository;
     private final PostAttachmentRepository postAttachmentRepository;
+    private final AccessGroupService accessGroupService;
 
     public PostService(PostRepository postRepository, SeriesPostRepository seriesPostRepository,
                         PostAccessService postAccessService, PostAccessGroupRepository postAccessGroupRepository,
-                        PostAttachmentRepository postAttachmentRepository) {
+                        PostAttachmentRepository postAttachmentRepository, AccessGroupService accessGroupService) {
         this.postRepository = postRepository;
         this.seriesPostRepository = seriesPostRepository;
         this.postAccessService = postAccessService;
         this.postAccessGroupRepository = postAccessGroupRepository;
         this.postAttachmentRepository = postAttachmentRepository;
+        this.accessGroupService = accessGroupService;
     }
 
     /**
@@ -56,19 +63,36 @@ public class PostService {
      * show everything unfiltered — an admin managing content needs to see
      * every private post regardless of their own group memberships. Only the
      * public path (includeDrafts=false) applies visibility filtering.
+     *
+     * `language` pre-filters by ContentLanguage (docs/10-multilingual-content.md
+     * §3.1) — null means "all languages", today's behaviour.
      */
     @Transactional(readOnly = true)
-    public List<PostResponse> search(String q, String category, boolean includeDrafts) {
+    public List<PostResponse> search(String q, String category, boolean includeDrafts, ContentLanguage language) {
         String normalizedQuery = blankToNull(q);
         String normalizedCategory = blankToNull(category);
-        List<Post> results = postRepository.search(normalizedQuery, normalizedCategory, includeDrafts);
+        List<Post> results = postRepository.search(normalizedQuery, normalizedCategory, includeDrafts, language);
 
         if (includeDrafts) {
             Map<Long, Integer> groupCounts = accessGroupCounts(results);
             Map<Long, List<PostAttachmentResponse>> attachmentsByPost = attachmentsByPostId(results);
+            // The admin listing is also the closest thing Post has to a
+            // "detail" endpoint (there is no separate GET /api/admin/posts/{id},
+            // unlike Book) — so, deliberately deviating from docs/10 §3.1's
+            // "translations never on listings" rule, the full sibling array
+            // (including DRAFTs) and translationStale are populated here too.
+            Map<Long, List<Post>> siblingsByGroup = siblingsByGroupId(results);
             return results.stream()
-                    .map(p -> PostResponse.withAttachments(p, null, groupCounts.get(p.getId()),
-                            attachmentsByPost.getOrDefault(p.getId(), List.of())))
+                    .map(p -> {
+                        List<Post> siblings = siblingsByGroup.getOrDefault(p.getTranslationGroupId(), List.of());
+                        List<PostResponse.TranslationRef> translations = siblings.stream()
+                                .filter(s -> !s.getId().equals(p.getId()))
+                                .map(PostResponse.TranslationRef::from)
+                                .toList();
+                        return PostResponse.withAttachments(p, null, groupCounts.get(p.getId()),
+                                attachmentsByPost.getOrDefault(p.getId(), List.of()), translations,
+                                isStale(p, siblings));
+                    })
                     .toList();
         }
 
@@ -77,6 +101,9 @@ public class PostService {
         return results.stream()
                 .<PostResponse>mapMulti((post, consumer) -> {
                     if (accessibleIds.contains(post.getId())) {
+                        // Listing rows never carry `translations` (docs/10 §3.1) —
+                        // it would be an N+1 group lookup per row for a field no
+                        // card renders; the switcher lives on the detail page.
                         consumer.accept(PostResponse.from(post));
                     } else if (post.getPrivateMetadataVisibility() == PostMetadataVisibility.PUBLIC_METADATA) {
                         consumer.accept(PostResponse.teaser(post));
@@ -97,7 +124,17 @@ public class PostService {
                 .findByPostIdOrderByUploadedAtAsc(post.getId()).stream()
                 .map(PostAttachmentResponse::from)
                 .toList();
-        return PostResponse.withAttachments(post, buildSeriesInfo(post, currentUser), null, attachments);
+        List<PostResponse.TranslationRef> translations = publishedTranslationRefs(post);
+        return PostResponse.withAttachments(post, buildSeriesInfo(post, currentUser), null, attachments,
+                translations, null);
+    }
+
+    /** Public-facing sibling list for the detail endpoint — PUBLISHED siblings only, excluding self. */
+    private List<PostResponse.TranslationRef> publishedTranslationRefs(Post post) {
+        return postRepository.findByTranslationGroupId(post.getTranslationGroupId()).stream()
+                .filter(s -> !s.getId().equals(post.getId()) && s.getStatus() == PostStatus.PUBLISHED)
+                .map(PostResponse.TranslationRef::from)
+                .toList();
     }
 
     /**
@@ -106,6 +143,11 @@ public class PostService {
      * drops non-matches (score 0) and anything the current viewer can't read
      * (private posts are simply omitted here, not teased — this is a link
      * list, not a listing page), then returns the top-scoring results.
+     *
+     * Language-scoped and translation-group-sibling-excluding (docs/10 §7.1):
+     * a Vietnamese reader must not be offered English suggestions, and "the
+     * same article in the other language" is not a related post — that's what
+     * the on-page switcher is for.
      */
     @Transactional(readOnly = true)
     public List<RelatedPostResponse> findRelated(String slug, Integer limit) {
@@ -118,9 +160,10 @@ public class PostService {
         int effectiveLimit = clampRelatedLimit(limit);
         List<String> sourceTags = Tags.toList(post.getTags());
         List<Post> candidates = postRepository.findRecentPublishedExcluding(
-                post.getId(), PageRequest.of(0, RELATED_CANDIDATE_POOL));
+                post.getId(), post.getLanguage(), PageRequest.of(0, RELATED_CANDIDATE_POOL));
 
         return candidates.stream()
+                .filter(candidate -> candidate.getTranslationGroupId() != post.getTranslationGroupId())
                 .filter(candidate -> postAccessService.canRead(currentUser, candidate))
                 .map(candidate -> Map.entry(candidate, relatedScore(post, sourceTags, candidate)))
                 .filter(scored -> scored.getValue() > 0)
@@ -171,7 +214,31 @@ public class PostService {
         if (coverImage != null && !coverImage.isEmpty()) {
             applyImage(post, coverImage);
         }
-        return PostResponse.from(postRepository.save(post));
+
+        Post target = null;
+        if (request.translationOfPostId() != null) {
+            target = postRepository.findById(request.translationOfPostId())
+                    .orElseThrow(() -> new NotFoundException("POST_NOT_FOUND", "Post not found"));
+            if (postRepository.existsByTranslationGroupIdAndLanguage(target.getTranslationGroupId(),
+                    post.getLanguage())) {
+                throw new TranslationLanguageTakenException();
+            }
+            // Joining an existing group: copy the target's access config
+            // (docs/10 §3.2) and record the translation direction.
+            post.setTranslationGroupId(target.getTranslationGroupId());
+            post.setTranslatedFromId(target.getId());
+            post.setSourceUpdatedAt(target.getUpdatedAt());
+            post.setVisibility(target.getVisibility());
+            post.setPrivateMetadataVisibility(target.getPrivateMetadataVisibility());
+        }
+
+        // A standalone row's translation_group_id (own id) is fixed up by
+        // Post.assignTranslationGroupId (@PostPersist) — see its javadoc.
+        Post saved = postRepository.save(post);
+        if (target != null) {
+            propagateAccessConfigToNewMember(target, saved);
+        }
+        return PostResponse.from(saved);
     }
 
     @Transactional
@@ -192,6 +259,11 @@ public class PostService {
         if (!post.getSlug().equals(newSlug) && postRepository.existsBySlugAndIdNot(newSlug, id)) {
             throw new IllegalArgumentException("Slug already exists");
         }
+        ContentLanguage newLanguage = request.language() != null ? request.language() : post.getLanguage();
+        if (newLanguage != post.getLanguage()
+                && postRepository.existsByTranslationGroupIdAndLanguage(post.getTranslationGroupId(), newLanguage)) {
+            throw new TranslationLanguageTakenException();
+        }
         applyRequest(post, request);
         if (removeCoverImage) {
             clearImage(post);
@@ -200,7 +272,64 @@ public class PostService {
         }
         // saveAndFlush forces the @PreUpdate callback (which stamps publishedAt) to run
         // before we read the entity back, so the response reflects it immediately.
-        return PostResponse.from(postRepository.saveAndFlush(post));
+        Post saved = postRepository.saveAndFlush(post);
+        // Visibility/access is a group-level property (docs/10 §2.3): keep every
+        // sibling in the group aligned with whatever this row now says.
+        propagateVisibilityToSiblings(saved);
+        return PostResponse.from(saved);
+    }
+
+    /**
+     * `PUT /api/admin/posts/{id}/translation-link` — links this post into
+     * targetId's translation group (targetId == null unlinks it into a fresh
+     * group of its own). Copies the target's access config onto the row being
+     * linked (docs/10 §2.5, §3.2).
+     */
+    @Transactional
+    public PostResponse linkTranslation(Long id, Long targetId) {
+        Post post = getPost(id);
+        if (targetId == null) {
+            post.setTranslationGroupId(post.getId());
+            post.setTranslatedFromId(null);
+            post.setSourceUpdatedAt(null);
+            return PostResponse.from(postRepository.save(post));
+        }
+        if (targetId.equals(id)) {
+            throw new IllegalArgumentException("Cannot link a post to itself");
+        }
+        Post target = getPost(targetId);
+        boolean collision = postRepository.findByTranslationGroupId(target.getTranslationGroupId()).stream()
+                .anyMatch(p -> !p.getId().equals(id) && p.getLanguage() == post.getLanguage());
+        if (collision) {
+            throw new TranslationLanguageTakenException();
+        }
+        post.setVisibility(target.getVisibility());
+        post.setPrivateMetadataVisibility(target.getPrivateMetadataVisibility());
+        post.setTranslationGroupId(target.getTranslationGroupId());
+        post.setTranslatedFromId(target.getId());
+        post.setSourceUpdatedAt(target.getUpdatedAt());
+        Post saved = postRepository.save(post);
+        propagateAccessConfigToNewMember(target, saved);
+        return PostResponse.from(saved);
+    }
+
+    /**
+     * `POST /api/admin/posts/{id}/translation-reviewed` — clears staleness by
+     * stamping the source's current updatedAt. Deliberately its own endpoint,
+     * never a side effect of a plain save (docs/10 §3.3).
+     */
+    @Transactional
+    public void markTranslationReviewed(Long id) {
+        Post post = getPost(id);
+        Post source = post.getTranslatedFromId() == null ? null : postRepository.findById(post.getTranslatedFromId())
+                .orElse(null);
+        if (source == null) {
+            // Either never a translation, or its source was since deleted
+            // (dangling translated_from_id treated as NULL — R9).
+            throw new IllegalArgumentException("NOT_A_TRANSLATION");
+        }
+        post.setSourceUpdatedAt(source.getUpdatedAt());
+        postRepository.save(post);
     }
 
     @Transactional
@@ -225,6 +354,11 @@ public class PostService {
         // comments/access-groups/series links — a pre-existing gap, see docs/06-project-memory.md),
         // so it must be cleared first or this throws a FK constraint violation. Scoped to just
         // the table this feature added; the broader cleanup gap is not fixed here.
+        //
+        // Deleting one language variant needs no translation-group cleanup at
+        // all: translation_group_id carries no FK (docs/10 §1.3). Any sibling
+        // whose translated_from_id pointed at this row simply dangles, and is
+        // treated as NULL ("this row is now the original") wherever it's read.
         postAttachmentRepository.deleteByPostId(id);
         postRepository.deleteById(id);
     }
@@ -247,6 +381,73 @@ public class PostService {
 
     // --- helpers ---
 
+    private Post getPost(Long id) {
+        return postRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("POST_NOT_FOUND", "Post not found"));
+    }
+
+    /** Re-applies target's own access-group/direct-user grants — now group-aware, this reaches the new member too. */
+    private void propagateAccessConfigToNewMember(Post target, Post newMember) {
+        List<AccessGroupBrief> groups = accessGroupService.getPostAccessGroups(target.getId());
+        accessGroupService.setPostAccessGroups(target.getId(), groups.stream().map(AccessGroupBrief::id).toList());
+        List<UserBrief> directUsers = accessGroupService.getPostDirectUsers(target.getId());
+        Long actingAdminId = currentUserId();
+        accessGroupService.setPostDirectUsers(target.getId(), directUsers.stream().map(UserBrief::id).toList(),
+                actingAdminId);
+    }
+
+    private void propagateVisibilityToSiblings(Post post) {
+        List<Post> siblings = postRepository.findByTranslationGroupId(post.getTranslationGroupId());
+        for (Post sibling : siblings) {
+            if (sibling.getId().equals(post.getId())) {
+                continue;
+            }
+            boolean changed = false;
+            if (sibling.getVisibility() != post.getVisibility()) {
+                sibling.setVisibility(post.getVisibility());
+                changed = true;
+            }
+            if (sibling.getPrivateMetadataVisibility() != post.getPrivateMetadataVisibility()) {
+                sibling.setPrivateMetadataVisibility(post.getPrivateMetadataVisibility());
+                changed = true;
+            }
+            if (changed) {
+                postRepository.save(sibling);
+            }
+        }
+    }
+
+    private Long currentUserId() {
+        User user = postAccessService.currentUserOrNull();
+        return user == null ? null : user.getId();
+    }
+
+    /** translationStale = source.updatedAt > sourceUpdatedAt, computed on read (docs/10 §1.2, §8 R1). */
+    private static boolean isStale(Post post, List<Post> siblings) {
+        if (post.getTranslatedFromId() == null) {
+            return false;
+        }
+        Post source = siblings.stream().filter(s -> s.getId().equals(post.getTranslatedFromId())).findFirst()
+                .orElse(null);
+        if (source == null) {
+            return false; // dangling translated_from_id -> treated as NULL (R9)
+        }
+        if (post.getSourceUpdatedAt() == null) {
+            return true;
+        }
+        return source.getUpdatedAt().isAfter(post.getSourceUpdatedAt());
+    }
+
+    /** Batched: every member of every translation group represented in `posts`, in one extra query. */
+    private Map<Long, List<Post>> siblingsByGroupId(List<Post> posts) {
+        if (posts.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> groupIds = posts.stream().map(Post::getTranslationGroupId).distinct().toList();
+        return postRepository.findByTranslationGroupIdIn(groupIds).stream()
+                .collect(Collectors.groupingBy(Post::getTranslationGroupId));
+    }
+
     private static void applyRequest(Post post, PostRequest request) {
         post.setTitle(request.title().trim());
         post.setSlug(request.slug().trim());
@@ -260,6 +461,9 @@ public class PostService {
                 request.privateMetadataVisibility() != null
                         ? request.privateMetadataVisibility()
                         : PostMetadataVisibility.PUBLIC_METADATA);
+        // Preserves the existing value on update when omitted; defaults to the
+        // entity's own initial value (VI) on create.
+        post.setLanguage(request.language() != null ? request.language() : post.getLanguage());
     }
 
     private static void applyImage(Post post, MultipartFile file) {

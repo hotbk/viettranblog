@@ -159,13 +159,16 @@ Fields:
 - viewCount: long (incremented by an atomic `UPDATE`, not read-modify-write)
 - coverImageData/ContentType/OriginalFilename/Size — inline bytea cover image (§4.3)
 - createdAt / updatedAt / publishedAt: Instant
+- language: enum `ContentLanguage` (VI/EN), translationGroupId: long, translatedFromId: Long
+  (nullable), sourceUpdatedAt: Instant (nullable), translationOrigin: enum (HUMAN/MACHINE) — §4.5
 
 Public listings expose `tags` as an array and hide drafts unless `includeDrafts=true` is requested
 by an authenticated admin caller.
 
 `Book` and `Exam` repeat the same shape deliberately: `status` (DRAFT/PUBLISHED) and `visibility`
 (PUBLIC/PRIVATE) are always two independent axes, and pre-existing rows default to PUBLIC so that
-adding access control never silently locks existing content.
+adding access control never silently locks existing content. `Book` repeats the dual-language
+columns too (§4.5); `Exam` does not (out of scope, `docs/10-multilingual-content.md` §7.8).
 
 ### 4.2 Shared access-control model
 
@@ -229,6 +232,16 @@ Known gap: `ContentImage` and `ContentVideo` have no FK back to a post, so image
 embedded in a *private* post's body are served unauthenticated by id. Closing this needs a schema
 change (add `post_id`), not just a matcher change.
 
+Dual-language content (§4.5) adds one more rule here: **`visibility`,
+`privateMetadataVisibility`/`metadataVisibility`, and the access-group/direct-user grant sets are
+group-level, not row-level.** The five `AccessGroupService` write methods (`setPostAccessGroups`,
+`setPostDirectUsers`, `setPostDirectUsersAdd`, `setBookAccessGroups`, `setBookDirectUsers`) apply to
+every row sharing a `translationGroupId`, and `PostService`/`BookService` `update()` propagate a
+visibility change to every sibling after save. The **read path is unchanged** — `PostAccessService`/
+`BookAccessService` still evaluate one row at a time; uniformity is enforced entirely at write time.
+See `docs/10-multilingual-content.md` §2 for the full reasoning, including why read-path enforcement
+was rejected.
+
 ### 4.3 Binary storage
 
 All binary content lives in PostgreSQL `bytea` columns. There is no object store and no filesystem
@@ -290,6 +303,30 @@ Backed up daily via `scripts/backup-postgres.sh` (cron, 02:15, 14-day retention 
 Highlights are private to their creator. Anonymous readers get nothing server-side; anonymous
 *reading progress* falls back to `localStorage` (there is deliberately no anonymous-writable
 progress endpoint).
+
+### 4.5 Dual-language content (VI/EN)
+
+Full design: `docs/10-multilingual-content.md`. Each language is a **full separate `Post`/`Book`
+row**, linked by a bare `translationGroupId` correlation column — not per-field `title_vi`/`title_en`
+columns, not a `translation_groups` table, and deliberately **not a foreign key**. Consequences:
+
+- `translationGroupId` is `NOT NULL` and, for a standalone row, equals the row's own id — every row
+  is always in a group, size 1 by default. Fixed up by `Post.assignTranslationGroupId`/
+  `Book.assignTranslationGroupId` (`@PostPersist`, since the id isn't known before the first INSERT
+  under `IDENTITY` generation), not duplicated per call site.
+- `translatedFromId` (nullable) records direction: `null` = original. **Not a FK** — deleting the
+  source leaves it dangling, and every reader of the field treats a dangling id as `null` ("this row
+  is now the original"). Deleting one language variant therefore needs **no new cleanup path** at
+  all, unlike every other gated child table in §4.2.
+- `UNIQUE(translationGroupId, language)` is the load-bearing constraint: it is structurally
+  impossible to have two Vietnamese rows in one group, so "the VI variant" is always unambiguous.
+- `sourceUpdatedAt` drives a computed (never stored) `translationStale = source.updatedAt >
+  sourceUpdatedAt`, cleared only by an explicit "mark reviewed" admin action, never as a side effect
+  of an ordinary save.
+- `status` (editorial) is per-row and **not** propagated; `visibility`/access grants are group-level
+  and **are** propagated (§4.2). This asymmetry — not an oversight — is the whole model.
+- Slugs stay globally unique across languages (`/posts/toi-uu-postgres`, `/posts/optimizing-postgres`)
+  — no `/en/` path prefix, no composite-unique slug, no routing change.
 
 ## 5. Schema Management
 

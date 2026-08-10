@@ -497,3 +497,85 @@ Known Phase-1 gaps (see `docs/08-book-library-module.md` §8 for the full risk
 list): no HTTP Range support on `/file` (whole file loaded into JVM heap per
 request — capped at 50MB to bound this); no scheduled `pg_dump` yet, and this
 feature is the largest bytea-storage risk added so far.
+
+## 13. Dual-language content (VI/EN) — see `docs/10-multilingual-content.md`
+
+Each language is a full separate `Post`/`Book` row, linked by a
+`translationGroupId` correlation column (no new table). `status` is per-row
+(not propagated); `visibility`/`privateMetadataVisibility`(posts)/
+`metadataVisibility`(books) and access-group/direct-user grants are
+group-level, propagated on write to every row sharing the group. Full
+rationale: `docs/10-multilingual-content.md` §1–§2.
+
+### Public read additions
+
+`GET /api/posts` and `GET /api/books` gain an optional `language` (`VI`|`EN`)
+query param; omitted ⇒ all languages (unchanged behaviour). Both list-row
+responses always carry `language`; they never carry `translations` (that
+would be an N+1 group lookup per row for a field no card renders).
+
+`GET /api/posts/{slug}` and `GET /api/books/{slug}` gain `language`,
+`translationOrigin` (`HUMAN`|`MACHINE`), and `translations` — the sibling
+language variants in this row's group, excluding itself:
+
+```json
+"translations": [
+  { "id": 10, "language": "EN", "slug": "optimizing-postgres",
+    "title": "Optimizing PostgreSQL", "status": "PUBLISHED", "visibility": "PUBLIC" }
+]
+```
+
+Public callers only ever see `PUBLISHED` siblings; `translations` is `[]` on a
+locked teaser row (a row the current viewer can't read never advertises where
+else the same content lives).
+
+### Admin surface
+
+| Method + path | Notes |
+|---|---|
+| `POST /api/posts`, `PUT /api/posts/{id}` | Gain optional `language` (default `VI`) and, create-only, `translationOfPostId` — joins that post's translation group, sets `translatedFromId`, stamps `sourceUpdatedAt`, and copies its `visibility`/`privateMetadataVisibility`. **Note:** unlike Book, plain post create/update live at `POST/PUT /api/posts` (ADMIN+EDITOR), not `/api/admin/posts` — the multilingual params are added there, matching this codebase's existing routing, not the `/api/admin/posts` convention `docs/10` assumed. |
+| `POST /api/admin/books`, `PUT /api/admin/books/{id}` | Same two multipart params: `language`, `translationOfBookId` (create-only) — this is how a translated PDF/TXT is added. |
+| `PUT /api/posts/{id}` / `PUT /api/admin/books/{id}` | Changing `language` is rejected with `409 TRANSLATION_LANGUAGE_TAKEN` if it collides with a sibling already in the group. |
+| `PUT /api/admin/posts/{id}/translation-link`, `PUT /api/admin/books/{id}/translation-link` | Body `{ "targetId": 42 }` links this row into `targetId`'s group and copies its access config; `{ "targetId": null }` unlinks it into a fresh group of its own. `400` if `targetId == id`; `409 TRANSLATION_LANGUAGE_TAKEN` on a language collision. |
+| `POST /api/admin/posts/{id}/translation-reviewed`, `POST /api/admin/books/{id}/translation-reviewed` | Stamps `sourceUpdatedAt = source.updatedAt`, clearing `translationStale`. `204`. `400 NOT_A_TRANSLATION` if the row has no `translatedFromId` (or it's dangling). |
+
+Admin listing (`GET /api/admin/posts`, `GET /api/admin/books`) and Book's
+admin detail (`GET /api/admin/books/{id}`) gain `language`, `translationStale`
+(boolean, computed as `source.updatedAt > sourceUpdatedAt`, never stored),
+and `translationOrigin`. **Deviation from the design doc:** Post has no
+separate `GET /api/admin/posts/{id}` detail endpoint (Book does) — the admin
+post listing already returns full content per row, so it doubles as the
+"detail" surface and carries the **full** `translations` array (including
+DRAFT siblings) on every row, not just on a detail call.
+
+### Errors
+
+| Condition | Response |
+|---|---|
+| `translationOfPostId`/`translationOfBookId`/`targetId` unknown | `404 POST_NOT_FOUND` / `404 BOOK_NOT_FOUND` |
+| Two rows of the same language in one group (create, link, or language change) | `409 TRANSLATION_LANGUAGE_TAKEN` |
+| Linking a row to itself | `400 BAD_REQUEST` |
+| `translation-reviewed` on a non-translation row | `400 NOT_A_TRANSLATION` |
+| Adding posts of different languages to one series | `400 SERIES_LANGUAGE_MISMATCH` (`PUT /api/admin/series/{id}/posts`) |
+
+### Other touches
+
+- `GET /api/posts/{slug}/related` is language-scoped to the source post and
+  excludes its own translation-group siblings.
+- `GET /api/sitemap.xml` gains the `xhtml` namespace and, for any post with a
+  public sibling, reciprocal self-inclusive `<xhtml:link rel="alternate"
+  hreflang="...">` entries plus `x-default` (pointing at the original —
+  `translatedFromId == null` within the group). A group of one (everything
+  today, until a real pair exists) emits none. Alternates are built only from
+  the already-PUBLISHED+PUBLIC-filtered list, so a DRAFT/PRIVATE sibling is
+  never advertised.
+- `GET /api/me/highlights` rows gain `bookLanguage`.
+- `GET /api/me/reading` rows already carry `language` (part of `BookResponse`).
+
+### Not yet implemented (frontend / Phase 2)
+
+`TASK-FE-008` (frontend: language preference, switcher, SEO head, admin
+Translations panel) and `TASK-BE-017`/`TASK-FE-009` (machine-assisted
+translation) are separate, not-yet-started tickets — see `TASKS.md`. The
+frontend API client (`frontend/src/api.ts`) does not yet send/read any of the
+fields above.

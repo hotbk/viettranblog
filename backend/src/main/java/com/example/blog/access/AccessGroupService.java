@@ -177,8 +177,22 @@ public class AccessGroupService {
 
     // --- post <-> group (managed from the post edit form: replace-all, same pattern as series post order) ---
 
+    /**
+     * Group-aware (docs/10-multilingual-content.md §2.4): the translation
+     * group is the unit of access configuration, so this applies to every
+     * language variant of the post, not just {@code postId}. Every write path
+     * in the codebase already funnels through this method, so making it
+     * group-aware here covers everything — including surfaces (e.g.
+     * AccessRequestService.approve) that never mention translations.
+     */
     @Transactional
     public void setPostAccessGroups(Long postId, List<Long> groupIds) {
+        for (Long siblingId : postTranslationSiblingIds(postId)) {
+            applyPostAccessGroups(siblingId, groupIds);
+        }
+    }
+
+    private void applyPostAccessGroups(Long postId, List<Long> groupIds) {
         postAccessGroupRepository.deleteByPostId(postId);
         if (groupIds == null || groupIds.isEmpty()) {
             return;
@@ -194,6 +208,15 @@ public class AccessGroupService {
         }
     }
 
+    /** Every post id sharing {@code postId}'s translation group, including itself. */
+    private List<Long> postTranslationSiblingIds(Long postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new NotFoundException("POST_NOT_FOUND", "Post not found"));
+        return postRepository.findByTranslationGroupId(post.getTranslationGroupId()).stream()
+                .map(Post::getId)
+                .toList();
+    }
+
     @Transactional(readOnly = true)
     public List<AccessGroupBrief> getPostAccessGroups(Long postId) {
         return postAccessGroupRepository.findByPostId(postId).stream()
@@ -203,8 +226,15 @@ public class AccessGroupService {
 
     // --- post <-> user direct grant (the "specific users" exception path) ---
 
+    /** Group-aware (docs/10 §2.4) — applies to every language variant of the post, same reasoning as above. */
     @Transactional
     public void setPostDirectUsers(Long postId, List<Long> userIds, Long actingAdminId) {
+        for (Long siblingId : postTranslationSiblingIds(postId)) {
+            applyPostDirectUsers(siblingId, userIds, actingAdminId);
+        }
+    }
+
+    private void applyPostDirectUsers(Long postId, List<Long> userIds, Long actingAdminId) {
         List<PostUserPermission> existing = postUserPermissionRepository.findByPostId(postId);
         existing.forEach(p -> postUserPermissionRepository.deleteById(p.getId()));
         if (userIds == null || userIds.isEmpty()) {
@@ -224,9 +254,19 @@ public class AccessGroupService {
                 "Post", String.valueOf(postId), "users=" + userIds);
     }
 
-    /** Adds one direct grant without disturbing existing ones — used when approving an access request. */
+    /**
+     * Adds one direct grant without disturbing existing ones — used when
+     * approving an access request. Group-aware (docs/10 §2.4): approving
+     * against the English post grants the Vietnamese one too, for free.
+     */
     @Transactional
     public void setPostDirectUsersAdd(Long postId, Long userId, Long actingAdminId) {
+        for (Long siblingId : postTranslationSiblingIds(postId)) {
+            applyPostDirectUsersAdd(siblingId, userId, actingAdminId);
+        }
+    }
+
+    private void applyPostDirectUsersAdd(Long postId, Long userId, Long actingAdminId) {
         if (postUserPermissionRepository.existsByPostIdAndUserId(postId, userId)) {
             return; // idempotent
         }
@@ -312,8 +352,15 @@ public class AccessGroupService {
 
     // --- book <-> group (managed from the book edit form: replace-all, same pattern as post <-> group) ---
 
+    /** Group-aware (docs/10 §2.4) — applies to every language variant of the book. */
     @Transactional
     public void setBookAccessGroups(Long bookId, List<Long> groupIds) {
+        for (Long siblingId : bookTranslationSiblingIds(bookId)) {
+            applyBookAccessGroups(siblingId, groupIds);
+        }
+    }
+
+    private void applyBookAccessGroups(Long bookId, List<Long> groupIds) {
         bookAccessGroupRepository.deleteByBookId(bookId);
         if (groupIds == null || groupIds.isEmpty()) {
             return;
@@ -328,6 +375,14 @@ public class AccessGroupService {
         }
     }
 
+    /** Every book id sharing {@code bookId}'s translation group, including itself. */
+    private List<Long> bookTranslationSiblingIds(Long bookId) {
+        Book book = getBook(bookId);
+        return bookRepository.findByTranslationGroupId(book.getTranslationGroupId()).stream()
+                .map(Book::getId)
+                .toList();
+    }
+
     @Transactional(readOnly = true)
     public List<AccessGroupBrief> getBookAccessGroups(Long bookId) {
         return bookAccessGroupRepository.findByBookId(bookId).stream()
@@ -337,8 +392,15 @@ public class AccessGroupService {
 
     // --- book <-> user direct grant (the "specific users" exception path) ---
 
+    /** Group-aware (docs/10 §2.4) — applies to every language variant of the book. */
     @Transactional
     public void setBookDirectUsers(Long bookId, List<Long> userIds, Long actingAdminId) {
+        for (Long siblingId : bookTranslationSiblingIds(bookId)) {
+            applyBookDirectUsers(siblingId, userIds, actingAdminId);
+        }
+    }
+
+    private void applyBookDirectUsers(Long bookId, List<Long> userIds, Long actingAdminId) {
         List<BookUserPermission> existing = bookUserPermissionRepository.findByBookId(bookId);
         existing.forEach(p -> bookUserPermissionRepository.deleteById(p.getId()));
         if (userIds == null || userIds.isEmpty()) {

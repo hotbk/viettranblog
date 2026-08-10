@@ -3,6 +3,7 @@ package com.example.blog.post;
 import com.example.blog.access.AccessGroupRequest;
 import com.example.blog.access.AccessGroupResponse;
 import com.example.blog.access.AccessGroupService;
+import com.example.blog.common.ContentLanguage;
 import com.example.blog.comment.Comment;
 import com.example.blog.comment.CommentRepository;
 import com.example.blog.user.User;
@@ -34,6 +35,7 @@ public class DataSeeder {
             List<Post> posts = seedPosts(postService, postRepository);
             seedComments(commentRepository, userRepository, posts);
             seedPrivatePostDemo(postService, postRepository, userRepository, accessGroupService);
+            seedTranslationPairDemo(postService, postRepository);
         };
     }
 
@@ -97,7 +99,7 @@ public class DataSeeder {
                 PostStatus.PUBLISHED,
                 PostVisibility.PUBLIC,
                 PostMetadataVisibility.PUBLIC_METADATA
-        ), null);
+        , ContentLanguage.VI, null), null);
 
         postService.create(new PostRequest(
                 "Why AI Agents Need Clear Boundaries",
@@ -109,7 +111,7 @@ public class DataSeeder {
                 PostStatus.PUBLISHED,
                 PostVisibility.PUBLIC,
                 PostMetadataVisibility.PUBLIC_METADATA
-        ), null);
+        , ContentLanguage.VI, null), null);
 
         postService.create(new PostRequest(
                 "Getting Started with PostgreSQL and Spring Data JPA",
@@ -121,7 +123,7 @@ public class DataSeeder {
                 PostStatus.PUBLISHED,
                 PostVisibility.PUBLIC,
                 PostMetadataVisibility.PUBLIC_METADATA
-        ), null);
+        , ContentLanguage.VI, null), null);
 
         postService.create(new PostRequest(
                 "Ghi chú về quản lý dự án cá nhân",
@@ -133,7 +135,7 @@ public class DataSeeder {
                 PostStatus.DRAFT,
                 PostVisibility.PUBLIC,
                 PostMetadataVisibility.PUBLIC_METADATA
-        ), null);
+        , ContentLanguage.VI, null), null);
 
         return postRepository.findAll();
     }
@@ -161,7 +163,7 @@ public class DataSeeder {
                 PostStatus.PUBLISHED,
                 PostVisibility.PRIVATE,
                 PostMetadataVisibility.PUBLIC_METADATA
-        ), null);
+        , ContentLanguage.VI, null), null);
 
         AccessGroupResponse group = accessGroupService.create(
                 new AccessGroupRequest("DevOps Internal", "devops-internal",
@@ -172,6 +174,40 @@ public class DataSeeder {
 
         userRepository.findByUsername("active_member")
                 .ifPresent(u -> accessGroupService.addUserToGroup(group.id(), u.getId(), null));
+    }
+
+    /**
+     * One real VI/EN translation pair, so the switcher, hreflang, and the
+     * language filter all have something to exercise locally (docs/10-multilingual-content.md
+     * §7.9) — without it, this whole feature would ship untested against the
+     * only thing it does. Links the English post into the same translation
+     * group as the existing "Building a Personal Blog" post via
+     * `translationOfPostId`, which also copies its access config (both PUBLIC
+     * here, so nothing visibly changes).
+     */
+    private void seedTranslationPairDemo(PostService postService, PostRepository postRepository) {
+        if (postRepository.existsBySlug("building-a-personal-blog-with-react-and-spring-boot-en")) {
+            return;
+        }
+        Post source = postRepository.findBySlug("building-personal-blog-react-spring-boot").orElse(null);
+        if (source == null) {
+            return;
+        }
+        postService.create(new PostRequest(
+                "Building a Personal Blog with React and Spring Boot",
+                "building-a-personal-blog-with-react-and-spring-boot-en",
+                "A practical note on building a clean full-stack blog MVP.",
+                "This article explains the first version of a personal blog built with React for the frontend "
+                        + "and Spring Boot for the backend. The goal is not to over-engineer, but to create a "
+                        + "maintainable foundation.",
+                "Technology",
+                List.of("react", "spring-boot", "fullstack"),
+                PostStatus.PUBLISHED,
+                PostVisibility.PUBLIC,
+                PostMetadataVisibility.PUBLIC_METADATA,
+                ContentLanguage.EN,
+                source.getId()
+        ), null);
     }
 
     private void seedComments(

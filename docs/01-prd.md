@@ -60,13 +60,19 @@ For MVP, the blog owner uses backend APIs to create/update/delete posts. A dedic
 
 ## 6. Out of Scope for MVP
 
-- Login/admin dashboard
-- Rich markdown editor
-- Image upload
-- Comment system
-- Newsletter
-- Full SEO automation
-- Multilingual content
+This list is the original MVP-era scope line. Several items below have since
+shipped in Phase 2 (see `docs/06-project-memory.md`) — left here as the
+historical record of what MVP itself excluded, not a current backlog.
+
+- Login/admin dashboard — shipped
+- Rich markdown editor — shipped
+- Image upload — shipped
+- Comment system — shipped
+- Newsletter — still out of scope
+- Full SEO automation — partially shipped (sitemap; see `docs/03-architecture.md` §6)
+- ~~Multilingual content~~ — reversed 2026-08-10: now in scope, design in
+  `docs/10-multilingual-content.md`, tracked as `TASK-BE-016`/`TASK-FE-008`
+  (Phase 1) and `TASK-BE-017`/`TASK-FE-009` (Phase 2) in `TASKS.md`.
 
 ## 7. Assumptions
 

@@ -1,6 +1,9 @@
 package com.example.blog.book;
 
+import com.example.blog.common.ContentLanguage;
+import com.example.blog.common.TranslationOrigin;
 import java.time.Instant;
+import java.util.List;
 
 public record BookResponse(
         Long id,
@@ -33,7 +36,18 @@ public record BookResponse(
         Instant publishedAt,
         // Admin-only convenience; null unless the caller explicitly asked for it
         // (admin listing), never sent for public reads.
-        Integer accessGroupCount
+        Integer accessGroupCount,
+        // --- Dual-language content (docs/10-multilingual-content.md §3) ---
+        ContentLanguage language,
+        TranslationOrigin translationOrigin,
+        // Admin-only convenience, same null-unless-asked-for convention as
+        // accessGroupCount. Computed as source.updatedAt > sourceUpdatedAt; never
+        // stored (docs/10 §1.2, §8 R1).
+        Boolean translationStale,
+        // Sibling language variants, excluding this row. Empty on a teaser and
+        // on listing rows (detail only — docs/10 §3.1). Public callers only
+        // ever see PUBLISHED siblings; admin detail sees every sibling.
+        List<TranslationRef> translations
 ) {
     public record ReadProgress(int position, int total, ProgressUnit unit, int percent, Instant updatedAt) {
         static ReadProgress from(BookReadingProgress p) {
@@ -41,11 +55,31 @@ public record BookResponse(
         }
     }
 
+    /** A sibling language variant — flat, mirrors PostResponse.TranslationRef. */
+    public record TranslationRef(
+            Long id,
+            ContentLanguage language,
+            String slug,
+            String title,
+            BookStatus status,
+            BookVisibility visibility
+    ) {
+        static TranslationRef from(Book book) {
+            return new TranslationRef(book.getId(), book.getLanguage(), book.getSlug(), book.getTitle(),
+                    book.getStatus(), book.getVisibility());
+        }
+    }
+
     static BookResponse from(Book book, ReadProgress progress) {
-        return from(book, progress, null);
+        return from(book, progress, null, List.of(), null);
     }
 
     static BookResponse from(Book book, ReadProgress progress, Integer accessGroupCount) {
+        return from(book, progress, accessGroupCount, List.of(), null);
+    }
+
+    static BookResponse from(Book book, ReadProgress progress, Integer accessGroupCount,
+                              List<TranslationRef> translations, Boolean translationStale) {
         boolean hasImage = book.getCoverImageData() != null && book.getCoverImageData().length > 0;
         return new BookResponse(
                 book.getId(),
@@ -71,7 +105,11 @@ public record BookResponse(
                 book.getCreatedAt(),
                 book.getUpdatedAt(),
                 book.getPublishedAt(),
-                accessGroupCount
+                accessGroupCount,
+                book.getLanguage(),
+                book.getTranslationOrigin(),
+                translationStale,
+                translations
         );
     }
 
@@ -107,7 +145,11 @@ public record BookResponse(
                 book.getCreatedAt(),
                 book.getUpdatedAt(),
                 book.getPublishedAt(),
-                null
+                null,
+                book.getLanguage(),
+                book.getTranslationOrigin(),
+                null,
+                List.of()
         );
     }
 }

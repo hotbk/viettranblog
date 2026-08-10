@@ -3,6 +3,8 @@ package com.example.blog.book;
 import com.example.blog.access.AccessGroupBrief;
 import com.example.blog.access.AccessGroupService;
 import com.example.blog.access.UserBrief;
+import com.example.blog.common.ContentLanguage;
+import com.example.blog.common.TranslationLinkRequest;
 import com.example.blog.user.UserService;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -37,7 +39,7 @@ public class AdminBookController {
 
     @GetMapping
     public List<BookResponse> listAll() {
-        return bookService.search(null, null, null, true);
+        return bookService.search(null, null, null, true, null);
     }
 
     @GetMapping("/{id}")
@@ -58,10 +60,12 @@ public class AdminBookController {
             @RequestParam(required = false) BookMetadataVisibility metadataVisibility,
             @RequestParam(defaultValue = "true") boolean downloadable,
             @RequestPart MultipartFile file,
-            @RequestPart(required = false) MultipartFile coverImage) {
+            @RequestPart(required = false) MultipartFile coverImage,
+            @RequestParam(required = false) ContentLanguage language,
+            @RequestParam(required = false) Long translationOfBookId) {
 
         BookRequest request = new BookRequest(title, slug, author, description, category, status,
-                visibility, metadataVisibility, downloadable);
+                visibility, metadataVisibility, downloadable, language, translationOfBookId);
         return bookService.create(request, file, coverImage);
     }
 
@@ -79,16 +83,30 @@ public class AdminBookController {
             @RequestParam(defaultValue = "true") boolean downloadable,
             @RequestPart(required = false) MultipartFile file,
             @RequestPart(required = false) MultipartFile coverImage,
-            @RequestParam(required = false, defaultValue = "false") boolean removeCoverImage) {
+            @RequestParam(required = false, defaultValue = "false") boolean removeCoverImage,
+            @RequestParam(required = false) ContentLanguage language) {
 
         BookRequest request = new BookRequest(title, slug, author, description, category, status,
-                visibility, metadataVisibility, downloadable);
+                visibility, metadataVisibility, downloadable, language, null);
         return bookService.update(id, request, file, coverImage, removeCoverImage);
     }
 
     @PutMapping("/{id}/status")
     public BookResponse updateStatus(@PathVariable Long id, @RequestParam BookStatus status) {
         return bookService.updateStatus(id, status);
+    }
+
+    // --- dual-language content (docs/10-multilingual-content.md §3.2) ---
+
+    @PutMapping("/{id}/translation-link")
+    public BookResponse linkTranslation(@PathVariable Long id, @RequestBody TranslationLinkRequest request) {
+        return bookService.linkTranslation(id, request.targetId());
+    }
+
+    @PostMapping("/{id}/translation-reviewed")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void markTranslationReviewed(@PathVariable Long id) {
+        bookService.markTranslationReviewed(id);
     }
 
     @DeleteMapping("/{id}")
