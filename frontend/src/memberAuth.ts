@@ -1,15 +1,7 @@
+import { decodeJwtPayload } from './jwt';
+
 const MEMBER_TOKEN_KEY = 'member_token';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
-
-function decodeJwtPayload(token: string): Record<string, unknown> | null {
-  try {
-    const payload = token.split('.')[1];
-    const decoded = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
-    return JSON.parse(decoded);
-  } catch {
-    return null;
-  }
-}
 
 export async function memberLogin(username: string, password: string): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/auth/login`, {
@@ -50,4 +42,12 @@ export function memberAuthHeader(): Record<string, string> {
   const token = getMemberToken();
   if (!token) return {};
   return { Authorization: `Bearer ${token}` };
+}
+
+/** Username of the logged-in member, read from the JWT `sub` claim, or null if not logged in. */
+export function getMemberUsername(): string | null {
+  const token = getMemberToken();
+  if (!token) return null;
+  const payload = decodeJwtPayload(token);
+  return typeof payload?.sub === 'string' ? payload.sub : null;
 }

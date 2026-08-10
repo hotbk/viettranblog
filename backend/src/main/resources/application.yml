@@ -6,8 +6,10 @@ spring:
       - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 12MB
+      # Raised for raw video uploads (ContentVideoController enforces its own 200MB app-level
+      # cap before transcoding; image upload keeps its tighter 5MB app-level check).
+      max-file-size: 200MB
+      max-request-size: 205MB
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/personal_blog}
     username: ${SPRING_DATASOURCE_USERNAME:blog_user}
@@ -24,6 +26,9 @@ server:
   port: 18080
 
 blog:
+  # Used by SitemapController to build absolute <loc> URLs. Override in production
+  # (PUBLIC_BASE_URL=https://tech2blogs.com) — see docs/07-deployment-guide.md.
+  public-base-url: ${PUBLIC_BASE_URL:http://localhost:5173}
   jwt:
     # WARNING: Override JWT_SECRET with a strong secret (32+ chars) in production
     secret: ${JWT_SECRET:dev-secret-do-not-use-in-production-32chars}

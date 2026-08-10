@@ -4,13 +4,24 @@ import {
   fetchAdminUsers,
   createUser,
   updateUserRole,
+  updateUserStatus,
   deleteUser,
   UnauthorizedError,
 } from '../api';
 import type { UserResponse, CreateUserRequest } from '../api';
+import type { UserStatus } from '../types';
 import { logout } from '../auth';
+import ThemeToggle from '../components/ThemeToggle';
 
 type Role = 'ADMIN' | 'EDITOR' | 'READER' | 'MEMBER';
+
+const STATUS_LABELS: Record<UserStatus, string> = {
+  PENDING: 'Pending', ACTIVE: 'Active', REJECTED: 'Rejected', SUSPENDED: 'Suspended',
+};
+
+const STATUS_BADGE: Record<UserStatus, string> = {
+  PENDING: 'badge--draft', ACTIVE: 'badge--published', REJECTED: 'badge--danger', SUSPENDED: 'badge--danger',
+};
 
 function formatDate(iso: string) {
   return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(iso));
@@ -47,10 +58,12 @@ export default function AdminUsers() {
   const [form, setForm] = useState<CreateUserRequest>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | UserStatus>('ALL');
 
   useEffect(() => {
     loadUsers();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter]);
 
   function showToast(message: string, type: 'success' | 'error') {
     const id = ++toastId;
@@ -67,7 +80,7 @@ export default function AdminUsers() {
     setLoading(true);
     setFetchError(null);
     try {
-      setUsers(await fetchAdminUsers());
+      setUsers(await fetchAdminUsers(statusFilter === 'ALL' ? undefined : statusFilter));
     } catch (err) {
       if (err instanceof UnauthorizedError) { handleUnauth(); return; }
       setFetchError(err instanceof Error ? err.message : 'Failed to load users');
@@ -128,6 +141,24 @@ export default function AdminUsers() {
     }
   }
 
+  // ── Approve / reject / suspend / reactivate ───────────────────────────────
+
+  async function handleStatusChange(user: UserResponse, newStatus: UserStatus) {
+    if (newStatus === user.status) return;
+    try {
+      const updated = await updateUserStatus(user.id, newStatus);
+      setUsers((prev) => {
+        const next = prev.map((u) => (u.id === updated.id ? updated : u));
+        // If we're viewing a filtered tab, a status change may move the user out of it.
+        return statusFilter === 'ALL' || updated.status === statusFilter ? next : next.filter((u) => u.id !== updated.id);
+      });
+      showToast(`${user.username} is now ${STATUS_LABELS[newStatus]}.`, 'success');
+    } catch (err) {
+      if (err instanceof UnauthorizedError) { handleUnauth(); return; }
+      showToast(err instanceof Error ? err.message : 'Failed to update status', 'error');
+    }
+  }
+
   // ── Delete user ────────────────────────────────────────────────────────────
 
   async function handleDelete(user: UserResponse) {
@@ -149,14 +180,20 @@ export default function AdminUsers() {
       <header className="admin-topbar">
         <div className="admin-topbar__inner">
           <div className="admin-topbar__brand">
-            <span className="admin-topbar__brand-name">viettran Blog</span>
+            <span className="admin-topbar__brand-name">TECH2BLOGS</span>
             <span className="admin-topbar__brand-sub">Admin Panel</span>
           </div>
           <div className="admin-topbar__actions">
+            <ThemeToggle />
             <Link to="/admin/posts" className="admin-topbar__view-site">Posts</Link>
             <Link to="/admin/exams" className="admin-topbar__view-site">Exams</Link>
             <Link to="/admin/attempts" className="admin-topbar__view-site">Attempts</Link>
             <Link to="/admin/series" className="admin-topbar__view-site">Series</Link>
+            <Link to="/admin/access-groups" className="admin-topbar__view-site">Access Groups</Link>
+            <Link to="/admin/access-requests" className="admin-topbar__view-site">Access Requests</Link>
+            <Link to="/admin/audit-logs" className="admin-topbar__view-site">Audit Logs</Link>
+            <Link to="/admin/about" className="admin-topbar__view-site">About</Link>
+            <Link to="/admin/books" className="admin-topbar__view-site">Books</Link>
             <Link to="/" className="admin-topbar__view-site">View site &rarr;</Link>
             <button className="btn--topbar-logout" onClick={handleLogout}>Sign out</button>
           </div>
@@ -178,6 +215,18 @@ export default function AdminUsers() {
           >
             + New User
           </button>
+        </div>
+
+        <div className="admin-filter-tabs">
+          {(['ALL', 'PENDING', 'ACTIVE', 'REJECTED', 'SUSPENDED'] as const).map((s) => (
+            <button
+              key={s}
+              className={`admin-filter-tab${statusFilter === s ? ' admin-filter-tab--active' : ''}`}
+              onClick={() => setStatusFilter(s)}
+            >
+              {s === 'ALL' ? 'All' : STATUS_LABELS[s]}
+            </button>
+          ))}
         </div>
 
         {/* ── Create form ─────────────────────── */}
@@ -278,11 +327,17 @@ export default function AdminUsers() {
         {!loading && !fetchError && users.length === 0 && (
           <div className="empty-state">
             <div className="empty-state__icon">&#128100;</div>
-            <p className="empty-state__title">No users yet</p>
-            <p className="empty-state__desc">Create the first user to get started.</p>
-            <button className="btn btn--accent" onClick={() => setShowForm(true)} style={{ marginTop: 16 }}>
-              + New User
-            </button>
+            <p className="empty-state__title">
+              {statusFilter === 'ALL' ? 'No users yet' : `No ${STATUS_LABELS[statusFilter].toLowerCase()} users`}
+            </p>
+            <p className="empty-state__desc">
+              {statusFilter === 'ALL' ? 'Create the first user to get started.' : 'Try a different filter.'}
+            </p>
+            {statusFilter === 'ALL' && (
+              <button className="btn btn--accent" onClick={() => setShowForm(true)} style={{ marginTop: 16 }}>
+                + New User
+              </button>
+            )}
           </div>
         )}
 
@@ -295,20 +350,28 @@ export default function AdminUsers() {
                   <th>Username</th>
                   <th>Email</th>
                   <th>Role</th>
+                  <th>Status</th>
                   <th>Created</th>
-                  <th style={{ width: 200 }}>Actions</th>
+                  <th style={{ width: 260 }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {users.map((user) => (
                   <tr key={user.id}>
                     <td>
-                      <div className="post-title-cell__title">{user.username}</div>
+                      <Link to={`/admin/users/${user.id}`} className="post-title-cell__title" style={{ textDecoration: 'none' }}>
+                        {user.username}
+                      </Link>
                     </td>
                     <td style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>{user.email}</td>
                     <td>
                       <span className={`badge ${ROLE_BADGE[user.role]}`}>
                         {ROLE_LABELS[user.role]}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`badge ${STATUS_BADGE[user.status]}`}>
+                        {STATUS_LABELS[user.status]}
                       </span>
                     </td>
                     <td style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>
@@ -327,6 +390,26 @@ export default function AdminUsers() {
                           <option value="EDITOR">Editor</option>
                           <option value="ADMIN">Admin</option>
                         </select>
+                        {user.status === 'PENDING' && (
+                          <>
+                            <button className="btn btn--accent btn--sm" onClick={() => handleStatusChange(user, 'ACTIVE')}>
+                              Approve
+                            </button>
+                            <button className="btn btn--danger-ghost btn--sm" onClick={() => handleStatusChange(user, 'REJECTED')}>
+                              Reject
+                            </button>
+                          </>
+                        )}
+                        {user.status === 'ACTIVE' && (
+                          <button className="btn btn--danger-ghost btn--sm" onClick={() => handleStatusChange(user, 'SUSPENDED')}>
+                            Suspend
+                          </button>
+                        )}
+                        {(user.status === 'SUSPENDED' || user.status === 'REJECTED') && (
+                          <button className="btn btn--ghost btn--sm" onClick={() => handleStatusChange(user, 'ACTIVE')}>
+                            Reactivate
+                          </button>
+                        )}
                         <button
                           className="btn btn--danger-ghost btn--sm"
                           onClick={() => handleDelete(user)}

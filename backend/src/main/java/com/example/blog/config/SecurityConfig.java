@@ -37,7 +37,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/sitemap.xml").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/about").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/posts").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/posts/*/cover-image").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/posts/*/comments").permitAll()
@@ -47,6 +50,26 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/series", "/api/series/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/exams").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/images/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/videos/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/books").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/books/*/cover-image").permitAll()
+                        // Progress/me-reading matchers MUST come before the GET /api/books/** wildcard below —
+                        // first-match-wins ordering means placing the wildcard first would silently make
+                        // progress endpoints anonymous (see R4, docs/08-book-library-module.md §5.3).
+                        .requestMatchers(HttpMethod.GET, "/api/books/*/progress").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/books/*/progress").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/me/reading").authenticated()
+                        // Same ordering requirement for highlights — a reader's private
+                        // notes, so GET must sit above the wildcard too (R4 again, see
+                        // docs/09-book-highlights-phase2.md §5.4). POST/PUT/DELETE are
+                        // already covered by .anyRequest().authenticated() below, listed
+                        // anyway so this reads as one unit.
+                        .requestMatchers(HttpMethod.GET, "/api/books/*/highlights").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/books/*/highlights").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/books/*/highlights/*").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/books/*/highlights/*").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/me/highlights").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/books/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/posts").hasAnyRole("ADMIN", "EDITOR")
                         .requestMatchers(HttpMethod.PUT, "/api/posts/**").hasAnyRole("ADMIN", "EDITOR")
                         .requestMatchers(HttpMethod.DELETE, "/api/posts/**").hasAnyRole("ADMIN", "EDITOR")
