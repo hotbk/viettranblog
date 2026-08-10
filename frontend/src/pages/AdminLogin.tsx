@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { login } from '../auth';
+import ThemeToggle from '../components/ThemeToggle';
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -26,10 +27,49 @@ export default function AdminLogin() {
 
   return (
     <div className="admin-login-page">
+      <div className="admin-login-page__theme-toggle">
+        <ThemeToggle />
+      </div>
       <div className="admin-login-card">
         <div className="admin-login-brand">
-          <div className="admin-login-logo">VT</div>
-          <h1>viettran Blog</h1>
+          <svg
+            className="admin-login-logo"
+            viewBox="0 0 100 100"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
+          >
+            <mask id="t2b-login-mask">
+              <rect width="100" height="100" rx="24" fill="#fff" />
+              <path
+                d="M9.33,18.48 A22,22 0 1,1 41,45.05 L8,96 L52,96"
+                fill="none"
+                stroke="#000"
+                strokeWidth="24"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                transform="translate(33.3,14) scale(0.76) translate(-8,-4)"
+              />
+              <path
+                d="M16,32 V68 M16,32 H24 M16,68 H24"
+                fill="none"
+                stroke="#000"
+                strokeWidth="9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M84,32 V68 M84,32 H76 M84,68 H76"
+                fill="none"
+                stroke="#000"
+                strokeWidth="9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </mask>
+            <rect width="100" height="100" rx="24" fill="var(--color-accent)" mask="url(#t2b-login-mask)" />
+          </svg>
+          <h1>TECH2BLOGS</h1>
           <p>Admin Panel &mdash; sign in to continue</p>
         </div>
 

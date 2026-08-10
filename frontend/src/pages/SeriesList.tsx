@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom';
 import { fetchSeries } from '../api';
 import type { SeriesSummary } from '../types';
 import NavBrand from '../components/NavBrand';
+import ThemeToggle from '../components/ThemeToggle';
+import NavUser from '../components/NavUser';
+import { useSeo } from '../useSeo';
 
 export default function SeriesList() {
   const [series, setSeries] = useState<SeriesSummary[]>([]);
@@ -18,6 +21,12 @@ export default function SeriesList() {
     return () => { cancelled = true; };
   }, []);
 
+  useSeo({
+    title: 'Series',
+    description: 'Database, DevOps, and DBA articles grouped into ordered series — read them start to finish.',
+    path: '/series',
+  });
+
   return (
     <>
       <nav className="site-nav">
@@ -26,6 +35,10 @@ export default function SeriesList() {
           <div className="site-nav__links">
             <Link to="/" className="site-nav__link">Home</Link>
             <Link to="/series" className="site-nav__link site-nav__link--active">Series</Link>
+            <Link to="/library" className="site-nav__link">Library</Link>
+            <Link to="/about" className="site-nav__link">About</Link>
+            <ThemeToggle />
+            <NavUser />
           </div>
         </div>
       </nav>
@@ -78,9 +91,11 @@ export default function SeriesList() {
 
       <footer className="site-footer">
         <p className="site-footer__text">
-          &copy; {new Date().getFullYear()} viettran Blog &mdash;{' '}
-          <Link to="/" className="site-footer__link">Home</Link>
+          &copy; {new Date().getFullYear()} TECH2BLOGS &mdash;{' '}
+          <Link to="/" className="site-footer__link">Home</Link> &mdash;{' '}
+          <Link to="/about" className="site-footer__link">About</Link>
         </p>
+        <p className="site-footer__credit">Made by Viet Tran Tuan</p>
       </footer>
     </>
   );

@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import { fetchAdminAttemptDetail, UnauthorizedError } from '../api';
 import { logout } from '../auth';
+import ThemeToggle from '../components/ThemeToggle';
 import type { AdminAttemptDetail } from '../types';
 
 function formatDate(s: string | null): string {
@@ -45,10 +46,11 @@ export default function AdminAttemptDetailPage() {
       <header className="admin-topbar">
         <div className="admin-topbar__inner">
           <div className="admin-topbar__brand">
-            <span className="admin-topbar__brand-name">viettran Blog</span>
+            <span className="admin-topbar__brand-name">TECH2BLOGS</span>
             <span className="admin-topbar__brand-sub">Admin Panel</span>
           </div>
           <div className="admin-topbar__actions">
+            <ThemeToggle />
             <Link to="/admin/attempts" className="admin-topbar__view-site">← Attempts</Link>
             <Link to="/" className="admin-topbar__view-site">View site &rarr;</Link>
             <button className="btn--topbar-logout" onClick={handleLogout}>Sign out</button>

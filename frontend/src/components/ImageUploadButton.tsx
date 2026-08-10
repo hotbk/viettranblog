@@ -41,7 +41,7 @@ export default function ImageUploadButton({ onInsert, onAuthError, label = 'Inse
       >
         {uploading ? 'Uploading...' : `🖼 ${label}`}
       </button>
-      {error && <span style={{ fontSize: 12, color: 'var(--color-danger)' }}>{error}</span>}
+      {error && <span style={{ fontSize: 12, color: 'var(--color-error)' }}>{error}</span>}
       <input
         ref={inputRef}
         type="file"

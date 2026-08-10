@@ -1,3 +1,6 @@
+import { getMemberToken } from './memberAuth';
+import { decodeJwtPayload } from './jwt';
+
 const TOKEN_KEY = 'admin_token';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
@@ -35,4 +38,27 @@ export function authHeader(): Record<string, string> {
   const token = getToken();
   if (!token) return {};
   return { Authorization: `Bearer ${token}` };
+}
+
+/** Username of the logged-in admin, read from the JWT `sub` claim, or null if not logged in. */
+export function getUsername(): string | null {
+  const token = getToken();
+  if (!token) return null;
+  const payload = decodeJwtPayload(token);
+  return typeof payload?.sub === 'string' ? payload.sub : null;
+}
+
+/**
+ * For the *public* reading surface (post list/detail, comments, series) —
+ * these calls need to identify whoever is logged in, admin or member, so the
+ * backend can evaluate private-post access. Tries the admin token first,
+ * then the member token. Without this, the backend never sees who's logged
+ * in on public pages and every private-post read looks anonymous.
+ */
+export function publicAuthHeader(): Record<string, string> {
+  const adminToken = getToken();
+  if (adminToken) return { Authorization: `Bearer ${adminToken}` };
+  const memberToken = getMemberToken();
+  if (memberToken) return { Authorization: `Bearer ${memberToken}` };
+  return {};
 }

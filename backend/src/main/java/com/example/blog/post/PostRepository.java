@@ -2,6 +2,7 @@ package com.example.blog.post;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -9,6 +10,11 @@ import org.springframework.data.repository.query.Param;
 
 public interface PostRepository extends JpaRepository<Post, Long> {
     Optional<Post> findBySlug(String slug);
+
+    // Fully public + published only — used for the sitemap. Deliberately excludes PRIVATE posts
+    // (even ones with a public teaser) since listing a gated URL in a public sitemap would defeat
+    // the point of gating it.
+    List<Post> findByStatusAndVisibility(PostStatus status, PostVisibility visibility);
 
     boolean existsBySlug(String slug);
 
@@ -33,4 +39,15 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     @Modifying
     @Query("UPDATE Post p SET p.viewCount = p.viewCount + 1 WHERE p.slug = :slug AND p.status = 'PUBLISHED'")
     int incrementViewCount(@Param("slug") String slug);
+
+    // Candidate pool for the "related posts" widget: recent published posts,
+    // excluding the post itself. Scoring by category/tag overlap and access
+    // filtering happen in PostService — kept out of JPQL since tags are a
+    // comma-separated string, not a queryable collection.
+    @Query("""
+            select p from Post p
+            where p.status = 'PUBLISHED' and p.id <> :excludeId
+            order by p.publishedAt desc nulls last, p.createdAt desc
+            """)
+    List<Post> findRecentPublishedExcluding(@Param("excludeId") Long excludeId, Pageable pageable);
 }

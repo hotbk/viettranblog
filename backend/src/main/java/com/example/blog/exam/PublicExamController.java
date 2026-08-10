@@ -18,6 +18,6 @@ public class PublicExamController {
 
     @GetMapping
     public List<ExamSummaryResponse> listPublished() {
-        return examService.listPublishedExams();
+        return examService.listPublicExams();
     }
 }

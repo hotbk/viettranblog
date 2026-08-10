@@ -3,6 +3,7 @@ package com.example.blog.post;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import com.example.blog.access.AccessGroupService;
 import com.example.blog.comment.CommentRepository;
 import com.example.blog.user.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -70,6 +71,11 @@ class DataSeederProfileTest {
         @Bean
         CommentRepository commentRepository() {
             return mock(CommentRepository.class);
+        }
+
+        @Bean
+        AccessGroupService accessGroupService() {
+            return mock(AccessGroupService.class);
         }
 
         @Bean

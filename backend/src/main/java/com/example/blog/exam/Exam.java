@@ -29,6 +29,10 @@ public class Exam {
     @Column(nullable = false)
     private ExamStatus status = ExamStatus.DRAFT;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ExamVisibility visibility = ExamVisibility.PUBLIC;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -63,6 +67,8 @@ public class Exam {
     public void setPassScore(Double passScore) { this.passScore = passScore; }
     public ExamStatus getStatus() { return status; }
     public void setStatus(ExamStatus status) { this.status = status; }
+    public ExamVisibility getVisibility() { return visibility; }
+    public void setVisibility(ExamVisibility visibility) { this.visibility = visibility; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public List<Question> getQuestions() { return questions; }

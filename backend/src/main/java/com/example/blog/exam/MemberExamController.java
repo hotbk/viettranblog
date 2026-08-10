@@ -17,7 +17,7 @@ public class MemberExamController {
 
     @GetMapping("/exams")
     public List<ExamSummaryResponse> listExams() {
-        return examService.listPublishedExams();
+        return examService.listPublishedExamsForMember();
     }
 
     @GetMapping("/exams/{id}")

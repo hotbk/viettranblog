@@ -3,6 +3,9 @@ import { Link, useParams } from 'react-router-dom';
 import { fetchSeriesBySlug } from '../api';
 import type { SeriesDetail as SeriesDetailType } from '../types';
 import NavBrand from '../components/NavBrand';
+import ThemeToggle from '../components/ThemeToggle';
+import NavUser from '../components/NavUser';
+import { useSeo } from '../useSeo';
 
 export default function SeriesDetail() {
   const { slug } = useParams<{ slug: string }>();
@@ -11,6 +14,16 @@ export default function SeriesDetail() {
   const [error, setError] = useState<string | null>(null);
 
   const loading = loadedSlug !== slug;
+
+  useSeo(
+    series
+      ? {
+          title: series.title,
+          description: series.description || `${series.title} — a series on TECH2BLOGS.`,
+          path: `/series/${series.slug}`,
+        }
+      : { title: 'Series', description: 'TECH2BLOGS series.', noindex: true }
+  );
 
   useEffect(() => {
     if (!slug) return;
@@ -36,6 +49,10 @@ export default function SeriesDetail() {
           <div className="site-nav__links">
             <Link to="/" className="site-nav__link">Home</Link>
             <Link to="/series" className="site-nav__link">Series</Link>
+            <Link to="/library" className="site-nav__link">Library</Link>
+            <Link to="/about" className="site-nav__link">About</Link>
+            <ThemeToggle />
+            <NavUser />
           </div>
         </div>
       </nav>
@@ -85,6 +102,9 @@ export default function SeriesDetail() {
                         {item.status === 'PUBLISHED' ? (
                           <Link to={`/posts/${item.slug}`} className="series-post-item__title">
                             {item.title}
+                            {item.visibility === 'PRIVATE' && (
+                              <span className="post-card__private-badge" title="Private post">🔒 Private</span>
+                            )}
                           </Link>
                         ) : (
                           <span className="series-post-item__title series-post-item__title--draft">
@@ -94,6 +114,11 @@ export default function SeriesDetail() {
                         )}
                         {item.excerpt && (
                           <p className="series-post-item__excerpt">{item.excerpt}</p>
+                        )}
+                        {!item.accessible && (
+                          <p className="series-post-item__excerpt" style={{ fontStyle: 'italic' }}>
+                            You don't have access to this post yet — click through to request access.
+                          </p>
                         )}
                       </div>
                     </li>
@@ -107,9 +132,11 @@ export default function SeriesDetail() {
 
       <footer className="site-footer">
         <p className="site-footer__text">
-          &copy; {new Date().getFullYear()} viettran Blog &mdash;{' '}
-          <Link to="/" className="site-footer__link">Home</Link>
+          &copy; {new Date().getFullYear()} TECH2BLOGS &mdash;{' '}
+          <Link to="/" className="site-footer__link">Home</Link> &mdash;{' '}
+          <Link to="/about" className="site-footer__link">About</Link>
         </p>
+        <p className="site-footer__credit">Made by Viet Tran Tuan</p>
       </footer>
     </>
   );

@@ -5,6 +5,7 @@ import {
   setSeriesPosts, UnauthorizedError,
 } from '../api';
 import { logout } from '../auth';
+import ThemeToggle from '../components/ThemeToggle';
 import type { SeriesDetail, SeriesPostItem, BlogPost } from '../types';
 import type { SeriesRequest } from '../api';
 
@@ -115,6 +116,7 @@ export default function AdminSeriesForm() {
     setOrderedPosts([...orderedPosts, {
       position: newPos, postId: post.id, title: post.title,
       slug: post.slug, excerpt: post.excerpt, status: post.status, publishedAt: post.publishedAt,
+      visibility: post.visibility, accessible: true,
     }]);
     setAddPostId('');
   }
@@ -162,10 +164,11 @@ export default function AdminSeriesForm() {
       <header className="admin-topbar">
         <div className="admin-topbar__inner">
           <div className="admin-topbar__brand">
-            <span className="admin-topbar__brand-name">viettran Blog</span>
+            <span className="admin-topbar__brand-name">TECH2BLOGS</span>
             <span className="admin-topbar__brand-sub">Admin Panel</span>
           </div>
           <div className="admin-topbar__actions">
+            <ThemeToggle />
             <Link to="/admin/posts" className="admin-topbar__view-site">Posts</Link>
             <Link to="/admin/exams" className="admin-topbar__view-site">Exams</Link>
             <Link to="/admin/attempts" className="admin-topbar__view-site">Attempts</Link>

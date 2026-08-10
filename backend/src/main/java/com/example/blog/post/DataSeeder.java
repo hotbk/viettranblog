@@ -1,10 +1,14 @@
 package com.example.blog.post;
 
+import com.example.blog.access.AccessGroupRequest;
+import com.example.blog.access.AccessGroupResponse;
+import com.example.blog.access.AccessGroupService;
 import com.example.blog.comment.Comment;
 import com.example.blog.comment.CommentRepository;
 import com.example.blog.user.User;
 import com.example.blog.user.UserRepository;
 import com.example.blog.user.UserRole;
+import com.example.blog.user.UserStatus;
 import java.util.List;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
@@ -22,12 +26,14 @@ public class DataSeeder {
             PostRepository postRepository,
             UserRepository userRepository,
             CommentRepository commentRepository,
+            AccessGroupService accessGroupService,
             PasswordEncoder passwordEncoder
     ) {
         return args -> {
             seedUsers(userRepository, passwordEncoder);
             List<Post> posts = seedPosts(postService, postRepository);
             seedComments(commentRepository, userRepository, posts);
+            seedPrivatePostDemo(postService, postRepository, userRepository, accessGroupService);
         };
     }
 
@@ -41,20 +47,39 @@ public class DataSeeder {
         admin.setEmail("admin@blog.local");
         admin.setPassword(encoder.encode("Admin@2024!"));
         admin.setRole(UserRole.ADMIN);
+        admin.setStatus(UserStatus.ACTIVE);
 
         User reader1 = new User();
         reader1.setUsername("viet_tran");
         reader1.setEmail("viet.tran@example.com");
         reader1.setPassword(encoder.encode("Reader@2024!"));
         reader1.setRole(UserRole.READER);
+        reader1.setStatus(UserStatus.ACTIVE);
 
         User reader2 = new User();
         reader2.setUsername("minh_nguyen");
         reader2.setEmail("minh.nguyen@example.com");
         reader2.setPassword(encoder.encode("Reader@2024!"));
         reader2.setRole(UserRole.READER);
+        reader2.setStatus(UserStatus.ACTIVE);
 
-        userRepository.saveAll(List.of(admin, reader1, reader2));
+        // Demo data for the private-post feature: one member still waiting on
+        // approval, one already active but not yet in any access group.
+        User pendingMember = new User();
+        pendingMember.setUsername("pending_member");
+        pendingMember.setEmail("pending.member@example.com");
+        pendingMember.setPassword(encoder.encode("Member@2024!"));
+        pendingMember.setRole(UserRole.MEMBER);
+        pendingMember.setStatus(UserStatus.PENDING);
+
+        User activeMember = new User();
+        activeMember.setUsername("active_member");
+        activeMember.setEmail("active.member@example.com");
+        activeMember.setPassword(encoder.encode("Member@2024!"));
+        activeMember.setRole(UserRole.MEMBER);
+        activeMember.setStatus(UserStatus.ACTIVE);
+
+        userRepository.saveAll(List.of(admin, reader1, reader2, pendingMember, activeMember));
     }
 
     private List<Post> seedPosts(PostService postService, PostRepository postRepository) {
@@ -69,7 +94,9 @@ public class DataSeeder {
                 "This article explains the first version of a personal blog built with React for the frontend and Spring Boot for the backend. The goal is not to over-engineer, but to create a maintainable foundation.",
                 "Technology",
                 List.of("react", "spring-boot", "fullstack"),
-                PostStatus.PUBLISHED
+                PostStatus.PUBLISHED,
+                PostVisibility.PUBLIC,
+                PostMetadataVisibility.PUBLIC_METADATA
         ), null);
 
         postService.create(new PostRequest(
@@ -79,7 +106,9 @@ public class DataSeeder {
                 "AI agents are useful only when their responsibilities are explicit. A frontend agent should not rewrite database logic. A review agent should not silently patch code. Boundaries create quality.",
                 "AI Workflow",
                 List.of("claude-code", "agents", "workflow"),
-                PostStatus.PUBLISHED
+                PostStatus.PUBLISHED,
+                PostVisibility.PUBLIC,
+                PostMetadataVisibility.PUBLIC_METADATA
         ), null);
 
         postService.create(new PostRequest(
@@ -89,7 +118,9 @@ public class DataSeeder {
                 "This guide walks through setting up a PostgreSQL database, configuring Spring Data JPA, and writing your first repository. We cover datasource properties, entity mapping, and common pitfalls.",
                 "Technology",
                 List.of("postgresql", "spring-boot", "jpa"),
-                PostStatus.PUBLISHED
+                PostStatus.PUBLISHED,
+                PostVisibility.PUBLIC,
+                PostMetadataVisibility.PUBLIC_METADATA
         ), null);
 
         postService.create(new PostRequest(
@@ -99,10 +130,48 @@ public class DataSeeder {
                 "Quản lý một dự án cá nhân khác hoàn toàn so với làm việc trong team. Bạn không có deadline cứng, không có ai review code, và rất dễ bỏ cuộc. Bài viết này chia sẻ những nguyên tắc giúp tôi duy trì được tiến độ.",
                 "Personal",
                 List.of("productivity", "side-project", "management"),
-                PostStatus.DRAFT
+                PostStatus.DRAFT,
+                PostVisibility.PUBLIC,
+                PostMetadataVisibility.PUBLIC_METADATA
         ), null);
 
         return postRepository.findAll();
+    }
+
+    /**
+     * One private post + one access group + one member already in it, so the
+     * private-post feature has something to click through in local dev
+     * without configuring anything by hand first. `active_member` can read
+     * it; `pending_member` (still PENDING) and `viet_tran`/`minh_nguyen`
+     * (ACTIVE but not in the group) cannot.
+     */
+    private void seedPrivatePostDemo(PostService postService, PostRepository postRepository,
+                                      UserRepository userRepository, AccessGroupService accessGroupService) {
+        if (postRepository.existsBySlug("internal-kubernetes-notes")) {
+            return;
+        }
+
+        postService.create(new PostRequest(
+                "Internal Kubernetes Notes",
+                "internal-kubernetes-notes",
+                "Ghi chú vận hành Kubernetes nội bộ — chỉ dành cho thành viên được cấp quyền.",
+                "Đây là nội dung private demo cho tính năng Private Post: cấu hình cluster, runbook xử lý sự cố, và các lưu ý vận hành chỉ chia sẻ nội bộ.",
+                "DevOps",
+                List.of("kubernetes", "internal", "devops"),
+                PostStatus.PUBLISHED,
+                PostVisibility.PRIVATE,
+                PostMetadataVisibility.PUBLIC_METADATA
+        ), null);
+
+        AccessGroupResponse group = accessGroupService.create(
+                new AccessGroupRequest("DevOps Internal", "devops-internal",
+                        "Ghi chú vận hành nội bộ dành cho đội DevOps.", true));
+
+        Post privatePost = postRepository.findBySlug("internal-kubernetes-notes").orElseThrow();
+        accessGroupService.setPostAccessGroups(privatePost.getId(), List.of(group.id()));
+
+        userRepository.findByUsername("active_member")
+                .ifPresent(u -> accessGroupService.addUserToGroup(group.id(), u.getId(), null));
     }
 
     private void seedComments(

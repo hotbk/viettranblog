@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /member/
+Disallow: /api/
+
+Sitemap: https://tech2blogs.com/sitemap.xml

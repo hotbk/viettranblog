@@ -1,6 +1,8 @@
 package com.example.blog.post;
 
 import java.util.List;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -21,9 +23,11 @@ import org.springframework.web.multipart.MultipartFile;
 public class PostController {
 
     private final PostService postService;
+    private final PostAttachmentService postAttachmentService;
 
-    public PostController(PostService postService) {
+    public PostController(PostService postService, PostAttachmentService postAttachmentService) {
         this.postService = postService;
+        this.postAttachmentService = postAttachmentService;
     }
 
     @GetMapping
@@ -37,6 +41,12 @@ public class PostController {
         return postService.findBySlug(slug);
     }
 
+    @GetMapping("/{slug}/related")
+    public List<RelatedPostResponse> related(@PathVariable String slug,
+                                              @RequestParam(required = false) Integer limit) {
+        return postService.findRelated(slug, limit);
+    }
+
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     public PostResponse create(
@@ -47,10 +57,13 @@ public class PostController {
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String tags,
             @RequestParam PostStatus status,
+            @RequestParam(defaultValue = "PUBLIC") PostVisibility visibility,
+            @RequestParam(required = false) PostMetadataVisibility privateMetadataVisibility,
             @RequestPart(required = false) MultipartFile coverImage) {
 
         List<String> tagList = parseTags(tags);
-        PostRequest request = new PostRequest(title, slug, excerpt, content, category, tagList, status);
+        PostRequest request = new PostRequest(title, slug, excerpt, content, category, tagList, status,
+                visibility, privateMetadataVisibility);
         return postService.create(request, coverImage);
     }
 
@@ -64,11 +77,14 @@ public class PostController {
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String tags,
             @RequestParam PostStatus status,
+            @RequestParam(defaultValue = "PUBLIC") PostVisibility visibility,
+            @RequestParam(required = false) PostMetadataVisibility privateMetadataVisibility,
             @RequestPart(required = false) MultipartFile coverImage,
             @RequestParam(required = false, defaultValue = "false") boolean removeCoverImage) {
 
         List<String> tagList = parseTags(tags);
-        PostRequest request = new PostRequest(title, slug, excerpt, content, category, tagList, status);
+        PostRequest request = new PostRequest(title, slug, excerpt, content, category, tagList, status,
+                visibility, privateMetadataVisibility);
         return postService.update(id, request, coverImage, removeCoverImage);
     }
 
@@ -83,6 +99,21 @@ public class PostController {
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(post.getCoverImageContentType()))
                 .body(post.getCoverImageData());
+    }
+
+    @GetMapping("/{id}/attachments/{attachmentId}")
+    public ResponseEntity<byte[]> getAttachment(@PathVariable Long id, @PathVariable Long attachmentId) {
+        PostAttachment attachment = postAttachmentService.getForView(id, attachmentId);
+        // DOC (legacy binary format) has no safe in-browser renderer in this app — force a
+        // download instead of "inline" so the browser doesn't just show a garbled prompt.
+        ContentDisposition.Builder disposition = attachment.getAttachmentType() == AttachmentType.DOC
+                ? ContentDisposition.attachment()
+                : ContentDisposition.inline();
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(attachment.getContentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        disposition.filename(attachment.getOriginalFilename()).build().toString())
+                .body(attachment.getData());
     }
 
     @PostMapping("/{slug}/view")

@@ -7,6 +7,8 @@ public record UserResponse(
         String username,
         String email,
         UserRole role,
+        UserStatus status,
+        Instant approvedAt,
         Instant createdAt
 ) {
     static UserResponse from(User user) {
@@ -15,6 +17,8 @@ public record UserResponse(
                 user.getUsername(),
                 user.getEmail(),
                 user.getRole(),
+                user.getStatus(),
+                user.getApprovedAt(),
                 user.getCreatedAt()
         );
     }

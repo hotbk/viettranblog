@@ -1,5 +1,9 @@
 package com.example.blog.exam;
 
+import com.example.blog.access.AccessGroupBrief;
+import com.example.blog.access.AccessGroupService;
+import com.example.blog.access.UserBrief;
+import com.example.blog.user.UserService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -10,9 +14,14 @@ import java.util.List;
 public class AdminExamController {
 
     private final ExamService examService;
+    private final AccessGroupService accessGroupService;
+    private final UserService userService;
 
-    public AdminExamController(ExamService examService) {
+    public AdminExamController(ExamService examService, AccessGroupService accessGroupService,
+                                UserService userService) {
         this.examService = examService;
+        this.accessGroupService = accessGroupService;
+        this.userService = userService;
     }
 
     @GetMapping
@@ -57,5 +66,29 @@ public class AdminExamController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteQuestion(@PathVariable Long questionId) {
         examService.deleteQuestion(questionId);
+    }
+
+    // --- private-exam access management, surfaced from the exam edit form (mirrors AdminPostController) ---
+
+    @GetMapping("/{id}/access-groups")
+    public List<AccessGroupBrief> getAccessGroups(@PathVariable Long id) {
+        return accessGroupService.getExamAccessGroups(id);
+    }
+
+    @PutMapping("/{id}/access-groups")
+    public List<AccessGroupBrief> setAccessGroups(@PathVariable Long id, @RequestBody List<Long> groupIds) {
+        accessGroupService.setExamAccessGroups(id, groupIds);
+        return accessGroupService.getExamAccessGroups(id);
+    }
+
+    @GetMapping("/{id}/access-users")
+    public List<UserBrief> getAccessUsers(@PathVariable Long id) {
+        return accessGroupService.getExamDirectUsers(id);
+    }
+
+    @PutMapping("/{id}/access-users")
+    public List<UserBrief> setAccessUsers(@PathVariable Long id, @RequestBody List<Long> userIds) {
+        accessGroupService.setExamDirectUsers(id, userIds, userService.currentUserIdOrNull());
+        return accessGroupService.getExamDirectUsers(id);
     }
 }

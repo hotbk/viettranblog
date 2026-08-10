@@ -40,6 +40,16 @@ public class Post {
     @Column(nullable = false)
     private PostStatus status = PostStatus.DRAFT;
 
+    // Access-control axis, independent of `status` above. Existing posts must
+    // stay public after migration — default is PUBLIC.
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, columnDefinition = "varchar(20) default 'PUBLIC'")
+    private PostVisibility visibility = PostVisibility.PUBLIC;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, columnDefinition = "varchar(20) default 'PUBLIC_METADATA'")
+    private PostMetadataVisibility privateMetadataVisibility = PostMetadataVisibility.PUBLIC_METADATA;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -97,6 +107,10 @@ public class Post {
     public void setTags(String tags) { this.tags = tags; }
     public PostStatus getStatus() { return status; }
     public void setStatus(PostStatus status) { this.status = status; }
+    public PostVisibility getVisibility() { return visibility; }
+    public void setVisibility(PostVisibility visibility) { this.visibility = visibility; }
+    public PostMetadataVisibility getPrivateMetadataVisibility() { return privateMetadataVisibility; }
+    public void setPrivateMetadataVisibility(PostMetadataVisibility v) { this.privateMetadataVisibility = v; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

@@ -5,6 +5,13 @@ import type { BlogPost, ExamSummary } from './types';
 import { isAuthenticated } from './auth';
 import { isMemberAuthenticated } from './memberAuth';
 import NavBrand from './components/NavBrand';
+import ThemeToggle from './components/ThemeToggle';
+import NavUser from './components/NavUser';
+import { useSeo } from './useSeo';
+
+const HOME_DESCRIPTION =
+  'Practical PostgreSQL, Oracle, and Kubernetes engineering notes: performance tuning, ' +
+  'production incidents, and DBA playbooks from real systems.';
 
 function formatDate(value: string | null): string {
   if (!value) return 'Unpublished';
@@ -65,6 +72,19 @@ export default function App() {
     fetchPublicExams().then(setExams).catch(() => { /* non-critical */ });
   }, []);
 
+  useSeo({
+    title: 'Database, DevOps & DBA Engineering Blog',
+    description: HOME_DESCRIPTION,
+    path: '/',
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'Blog',
+      name: 'TECH2BLOGS',
+      description: HOME_DESCRIPTION,
+      url: window.location.origin,
+    },
+  });
+
   const authenticated = isAuthenticated();
 
   return (
@@ -76,6 +96,8 @@ export default function App() {
           <div className="site-nav__links">
             <Link to="/" className="site-nav__link">Home</Link>
             <Link to="/series" className="site-nav__link">Series</Link>
+            <Link to="/library" className="site-nav__link">Library</Link>
+            <Link to="/about" className="site-nav__link">About</Link>
             {isMember ? (
               <Link to="/member/exams" className="site-nav__link">Exams</Link>
             ) : (
@@ -86,6 +108,8 @@ export default function App() {
             ) : (
               <Link to="/admin/login" className="site-nav__link">Admin</Link>
             )}
+            <ThemeToggle />
+            <NavUser />
           </div>
         </div>
       </nav>
@@ -93,9 +117,12 @@ export default function App() {
       {/* ── Hero ───────────────────────────────── */}
       <section className="hero">
         <div className="hero__inner">
-          <p className="hero__eyebrow">✦ Personal Blog</p>
-          <h1 className="hero__title">viettran Blog</h1>
-          <p className="hero__tagline">Thoughts on technology &amp; life — software, data, and things worth sharing.</p>
+          <p className="hero__eyebrow">✦ Database · DevOps · DBA</p>
+          <h1 className="hero__title">
+            TECH2BLOGS
+            <span className="hero__title-sub"> — Database &amp; DevOps Engineering Notes</span>
+          </h1>
+          <p className="hero__tagline">{HOME_DESCRIPTION}</p>
         </div>
         {!loading && posts.length > 0 && (
           <div className="hero__stats">
@@ -230,9 +257,11 @@ export default function App() {
       {/* ── Footer ─────────────────────────────── */}
       <footer className="site-footer">
         <p className="site-footer__text">
-          &copy; {new Date().getFullYear()} viettran Blog &mdash;{' '}
+          &copy; {new Date().getFullYear()} TECH2BLOGS &mdash;{' '}
+          <Link to="/about" className="site-footer__link">About</Link> &mdash;{' '}
           <Link to="/admin/login" className="site-footer__link">Admin</Link>
         </p>
+        <p className="site-footer__credit">Made by Viet Tran Tuan</p>
       </footer>
     </>
   );
@@ -253,9 +282,14 @@ function PostCard({ post }: { post: BlogPost }) {
           <span className="post-card__category">{post.category}</span>
         )}
         <span className="post-card__date">{formatDate(post.publishedAt)}</span>
+        {post.visibility === 'PRIVATE' && (
+          <span className="post-card__private-badge" title="Private post">🔒 Private</span>
+        )}
       </div>
 
-      <h2 className="post-card__title">{post.title}</h2>
+      <h2 className="post-card__title">
+        <Link to={`/posts/${post.slug}`} className="post-card__title-link">{post.title}</Link>
+      </h2>
 
       {post.excerpt && (
         <p className="post-card__excerpt">{post.excerpt}</p>

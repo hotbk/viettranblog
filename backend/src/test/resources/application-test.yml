@@ -4,8 +4,8 @@ spring:
       - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 12MB
+      max-file-size: 200MB
+      max-request-size: 205MB
   datasource:
     url: jdbc:h2:mem:personal_blog_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
     username: sa
@@ -15,6 +15,7 @@ spring:
       ddl-auto: create-drop
 
 blog:
+  public-base-url: http://localhost:5173
   jwt:
     secret: test-secret-do-not-use-in-production-32chars
     expiration-ms: 86400000

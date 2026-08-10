@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { memberLogin } from '../memberAuth';
 import NavBrand from '../components/NavBrand';
+import ThemeToggle from '../components/ThemeToggle';
+import NavUser from '../components/NavUser';
 
 export default function MemberLogin() {
   const navigate = useNavigate();
@@ -31,6 +33,8 @@ export default function MemberLogin() {
           <NavBrand />
           <div className="site-nav__links">
             <Link to="/" className="site-nav__link">Home</Link>
+            <ThemeToggle />
+            <NavUser />
           </div>
         </div>
       </nav>
@@ -77,6 +81,11 @@ export default function MemberLogin() {
               {loading ? 'Signing in...' : 'Sign in'}
             </button>
           </form>
+
+          <p style={{ textAlign: 'center', marginTop: 24, fontSize: 13, color: 'var(--color-text-muted)' }}>
+            No account yet?{' '}
+            <Link to="/member/register" style={{ color: 'var(--color-slate)', fontWeight: 500 }}>Create one</Link>
+          </p>
         </div>
       </div>
     </div>

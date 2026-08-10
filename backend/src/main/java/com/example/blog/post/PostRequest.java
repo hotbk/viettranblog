@@ -11,6 +11,8 @@ public record PostRequest(
         @NotBlank String content,
         String category,
         List<String> tags,
-        @NotNull PostStatus status
+        @NotNull PostStatus status,
+        @NotNull PostVisibility visibility,
+        PostMetadataVisibility privateMetadataVisibility
 ) {
 }

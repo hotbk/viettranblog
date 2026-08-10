@@ -4,17 +4,48 @@ import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { fetchPostBySlug, recordPostView, fetchComments, submitComment } from '../api';
+import { fetchPostBySlug, recordPostView, fetchComments, submitComment, PostAccessDeniedError, createAccessRequest } from '../api';
 import type { CommentRequest } from '../api';
-import type { BlogPost, Comment } from '../types';
+import type { BlogPost, Comment, AccessDenialCode } from '../types';
+import { isAuthenticated } from '../auth';
+import { isMemberAuthenticated } from '../memberAuth';
 import NavBrand from '../components/NavBrand';
+import ThemeToggle from '../components/ThemeToggle';
+import NavUser from '../components/NavUser';
+import RelatedPosts from '../components/RelatedPosts';
+import PostAttachments from '../components/PostAttachments';
+import { useSeo } from '../useSeo';
+
+const DENIAL_COPY: Record<AccessDenialCode, { title: string; desc: string }> = {
+  NOT_AUTHENTICATED: {
+    title: 'This article is private.',
+    desc: 'Please sign in to continue.',
+  },
+  ACCOUNT_PENDING: {
+    title: 'Your account is awaiting approval.',
+    desc: 'An admin needs to approve your account before you can access private articles.',
+  },
+  ACCOUNT_REJECTED: {
+    title: 'Your account registration was not approved.',
+    desc: 'Contact an admin if you believe this is a mistake.',
+  },
+  ACCOUNT_SUSPENDED: {
+    title: 'Your account has been suspended.',
+    desc: 'Contact an admin for more information.',
+  },
+  NO_ACCESS: {
+    title: "You don't have permission to access this article.",
+    desc: 'You can request access from an admin below.',
+  },
+};
 
 function formatDate(value: string | null): string {
   if (!value) return 'Unpublished';
   return new Intl.DateTimeFormat('en-US', { dateStyle: 'long' }).format(new Date(value));
 }
 
-function readingTime(content: string): string {
+function readingTime(content: string | null): string {
+  if (!content) return '';
   const words = content.trim().split(/\s+/).length;
   const mins = Math.max(1, Math.round(words / 200));
   return `${mins} min read`;
@@ -40,6 +71,7 @@ export default function PostDetail() {
   const [post, setPost] = useState<BlogPost | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [denial, setDenial] = useState<AccessDenialCode | null>(null);
 
   useReadingProgress();
 
@@ -50,6 +82,7 @@ export default function PostDetail() {
     async function load() {
       setLoading(true);
       setError(null);
+      setDenial(null);
       try {
         const data = await fetchPostBySlug(slug!);
         if (!cancelled) {
@@ -57,7 +90,12 @@ export default function PostDetail() {
           recordPostView(slug!);
         }
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Post not found');
+        if (cancelled) return;
+        if (err instanceof PostAccessDeniedError) {
+          setDenial(err.code);
+        } else {
+          setError(err instanceof Error ? err.message : 'Post not found');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -66,6 +104,36 @@ export default function PostDetail() {
     load();
     return () => { cancelled = true; };
   }, [slug]);
+
+  useSeo(
+    post
+      ? {
+          title: post.title,
+          description: post.excerpt || `Read "${post.title}" on TECH2BLOGS.`,
+          path: `/posts/${post.slug}`,
+          type: 'article',
+          image: post.hasCoverImage && post.coverImageUrl
+            ? window.location.origin + post.coverImageUrl
+            : undefined,
+          jsonLd: {
+            '@context': 'https://schema.org',
+            '@type': 'BlogPosting',
+            headline: post.title,
+            description: post.excerpt || undefined,
+            datePublished: post.publishedAt ?? undefined,
+            dateModified: post.updatedAt,
+            author: { '@type': 'Organization', name: 'TECH2BLOGS' },
+            publisher: { '@type': 'Organization', name: 'TECH2BLOGS' },
+            mainEntityOfPage: window.location.origin + `/posts/${post.slug}`,
+          },
+        }
+      : {
+          // Loading, not-found, or access-denied — never index these transient/gated states.
+          title: 'Post',
+          description: 'TECH2BLOGS article.',
+          noindex: true,
+        }
+  );
 
   return (
     <>
@@ -77,6 +145,10 @@ export default function PostDetail() {
           <NavBrand />
           <div className="site-nav__links">
             <Link to="/" className="site-nav__link">Home</Link>
+            <Link to="/library" className="site-nav__link">Library</Link>
+            <Link to="/about" className="site-nav__link">About</Link>
+            <ThemeToggle />
+            <NavUser />
           </div>
         </div>
       </nav>
@@ -87,28 +159,55 @@ export default function PostDetail() {
             Back to posts
           </button>
 
-          {/* Loading */}
-          {loading && (
-            <div className="spinner-wrap">
-              <div className="spinner" />
-              <span className="spinner-label">Loading post...</span>
-            </div>
-          )}
+          <div className="post-detail__narrow">
+            {/* Loading */}
+            {loading && (
+              <div className="spinner-wrap">
+                <div className="spinner" />
+                <span className="spinner-label">Loading post...</span>
+              </div>
+            )}
 
-          {/* Error */}
-          {!loading && error && (
-            <div className="empty-state">
-              <div className="empty-state__icon">&#128197;</div>
-              <p className="empty-state__title">Post not found</p>
-              <p className="empty-state__desc">{error}</p>
-              <Link to="/" className="btn btn--primary" style={{ marginTop: 16 }}>
-                Go home
-              </Link>
-            </div>
-          )}
+            {/* Error */}
+            {!loading && error && (
+              <div className="empty-state">
+                <div className="empty-state__icon">&#128197;</div>
+                <p className="empty-state__title">Post not found</p>
+                <p className="empty-state__desc">{error}</p>
+                <Link to="/" className="btn btn--primary" style={{ marginTop: 16 }}>
+                  Go home
+                </Link>
+              </div>
+            )}
 
-          {/* Post content */}
+            {/* Private post — denied, with the specific reason (see spec §10) */}
+            {!loading && denial && (
+              <div className="empty-state private-denied">
+                <div className="empty-state__icon" aria-hidden>🔒</div>
+                <p className="empty-state__title">{DENIAL_COPY[denial].title}</p>
+                <p className="empty-state__desc">{DENIAL_COPY[denial].desc}</p>
+                <div className="private-denied__actions">
+                  {denial === 'NOT_AUTHENTICATED' && (
+                    <>
+                      <Link to="/member/login" className="btn btn--primary">Sign in</Link>
+                      <Link to="/" className="btn btn--ghost">Go home</Link>
+                    </>
+                  )}
+                  {denial === 'NO_ACCESS' && (isAuthenticated() || isMemberAuthenticated()) && (
+                    <RequestAccessButton slug={slug!} />
+                  )}
+                  {denial !== 'NOT_AUTHENTICATED' && (
+                    <Link to="/" className="btn btn--ghost">Go home</Link>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Post content + sidebar */}
           {!loading && post && (
+          <div className="post-detail__layout">
+          <div className="post-detail__main">
             <article>
               <div className="post-detail__category-row">
                 {post.category && (
@@ -189,25 +288,77 @@ export default function PostDetail() {
                     },
                   }}
                 >
-                  {post.content}
+                  {post.content ?? ''}
                 </ReactMarkdown>
               </div>
-            </article>
-          )}
 
-          {/* Comment section — only show when post loaded */}
-          {!loading && post && <CommentSection slug={post.slug} />}
+              <PostAttachments attachments={post.attachments} />
+            </article>
+
+            <CommentSection slug={post.slug} />
+          </div>
+
+          <RelatedPosts slug={post.slug} />
+          </div>
+          )}
         </div>
       </div>
 
       {/* ── Footer ─────────────────────────────── */}
       <footer className="site-footer">
         <p className="site-footer__text">
-          &copy; {new Date().getFullYear()} viettran Blog &mdash;{' '}
-          <Link to="/" className="site-footer__link">Home</Link>
+          &copy; {new Date().getFullYear()} TECH2BLOGS &mdash;{' '}
+          <Link to="/" className="site-footer__link">Home</Link> &mdash;{' '}
+          <Link to="/about" className="site-footer__link">About</Link>
         </p>
+        <p className="site-footer__credit">Made by Viet Tran Tuan</p>
       </footer>
     </>
+  );
+}
+
+// ── RequestAccessButton ─────────────────────────────────────────────────────────
+
+function RequestAccessButton({ slug }: { slug: string }) {
+  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [message, setMessage] = useState('');
+
+  async function handleRequest() {
+    setState('sending');
+    try {
+      await createAccessRequest(slug, message.trim() || undefined);
+      setState('sent');
+    } catch {
+      setState('error');
+    }
+  }
+
+  if (state === 'sent') {
+    return <p className="private-denied__sent">Access request sent — an admin will review it.</p>;
+  }
+
+  return (
+    <div className="private-denied__request">
+      <textarea
+        className="field__textarea"
+        rows={2}
+        placeholder="Optional message to the admin..."
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        maxLength={500}
+      />
+      <button
+        type="button"
+        className="btn btn--primary"
+        onClick={handleRequest}
+        disabled={state === 'sending'}
+      >
+        {state === 'sending' ? 'Sending...' : 'Request Access'}
+      </button>
+      {state === 'error' && (
+        <p className="private-denied__error">Could not send the request — it may already be pending.</p>
+      )}
+    </div>
   );
 }
 

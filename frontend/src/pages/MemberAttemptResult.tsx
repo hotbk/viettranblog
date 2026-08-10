@@ -6,6 +6,8 @@ import { fetchAttemptDetail, UnauthorizedError } from '../api';
 import { memberLogout } from '../memberAuth';
 import type { AttemptDetail } from '../types';
 import NavBrand from '../components/NavBrand';
+import ThemeToggle from '../components/ThemeToggle';
+import NavUser from '../components/NavUser';
 
 function formatDuration(seconds: number | null): string {
   if (seconds == null) return '—';
@@ -49,6 +51,8 @@ export default function MemberAttemptResult() {
           <NavBrand />
           <div className="site-nav__links">
             <Link to="/member/exams" className="site-nav__link">← Exams</Link>
+            <ThemeToggle />
+            <NavUser />
           </div>
         </div>
       </nav>
@@ -158,9 +162,10 @@ export default function MemberAttemptResult() {
 
       <footer className="site-footer">
         <p className="site-footer__text">
-          &copy; {new Date().getFullYear()} viettran Blog &mdash;{' '}
+          &copy; {new Date().getFullYear()} TECH2BLOGS &mdash;{' '}
           <Link to="/" className="site-footer__link">Home</Link>
         </p>
+        <p className="site-footer__credit">Made by Viet Tran Tuan</p>
       </footer>
     </>
   );

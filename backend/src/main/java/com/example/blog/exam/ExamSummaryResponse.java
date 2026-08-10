@@ -10,6 +10,7 @@ public record ExamSummaryResponse(
         Integer scoreScale,
         Double passScore,
         String status,
+        String visibility,
         int questionCount,
         String createdAt,
         String updatedAt
@@ -25,6 +26,7 @@ public record ExamSummaryResponse(
                 exam.getScoreScale(),
                 exam.getPassScore(),
                 exam.getStatus().name(),
+                exam.getVisibility().name(),
                 exam.getQuestions().size(),
                 exam.getCreatedAt() != null ? exam.getCreatedAt().format(FMT) : null,
                 exam.getUpdatedAt() != null ? exam.getUpdatedAt().format(FMT) : null

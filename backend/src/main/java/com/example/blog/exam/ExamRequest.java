@@ -8,5 +8,6 @@ public record ExamRequest(
         Integer timeLimit,
         Integer scoreScale,
         Double passScore,
-        String status
+        String status,
+        String visibility
 ) {}
