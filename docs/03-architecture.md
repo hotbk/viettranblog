@@ -42,6 +42,13 @@ com.example.blog
 └── health
 ```
 
+Layering:
+- REST controllers handle HTTP requests and responses
+- Services contain business rules and filtering logic
+- Repositories manage persistence with JPA
+- DTOs map entity state to API payloads
+- Error handling is centralized for consistent response shape
+
 ## 4. Data Model
 
 ### Post
@@ -54,11 +61,13 @@ Fields:
 - excerpt: String
 - content: String
 - category: String
-- tags: String, comma-separated at MVP stage
+- tags: String internally (comma-separated persistence) but exposed by the API as an array of strings
 - status: enum DRAFT/PUBLISHED
 - createdAt: Instant
 - updatedAt: Instant
 - publishedAt: Instant
+
+The public API surface should expose `tags` as an array and keep draft posts hidden unless `includeDrafts=true` is explicitly requested by internal/test tooling.
 
 ## 5. Error Handling
 
@@ -73,10 +82,11 @@ Backend returns structured error response:
 
 ## 6. Security Notes
 
-MVP does not include authentication. Therefore:
+MVP does not include authentication for public pages. Therefore:
 
 - Public read APIs are acceptable
-- Write APIs must not be deployed publicly without authentication
+- Public endpoints should only expose published content by default
+- Write APIs may exist for internal/dev use, but must not be deployed publicly without authentication
 - Future phase must add Spring Security before production exposure
 
 ## 7. Deployment Direction
