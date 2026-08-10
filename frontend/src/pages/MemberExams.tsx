@@ -4,6 +4,8 @@ import { fetchMemberExams, fetchMyAttempts, UnauthorizedError } from '../api';
 import { memberLogout } from '../memberAuth';
 import type { ExamSummary, AttemptSummary } from '../types';
 import NavBrand from '../components/NavBrand';
+import ThemeToggle from '../components/ThemeToggle';
+import NavUser from '../components/NavUser';
 
 export default function MemberExams() {
   const navigate = useNavigate();
@@ -43,6 +45,8 @@ export default function MemberExams() {
             <Link to="/series" className="site-nav__link">Series</Link>
             <Link to="/member/history" className="site-nav__link">History</Link>
             <button className="btn btn--ghost btn--sm" onClick={handleLogout} style={{ marginLeft: 8 }}>Sign out</button>
+            <ThemeToggle />
+            <NavUser />
           </div>
         </div>
       </nav>
@@ -118,9 +122,10 @@ export default function MemberExams() {
 
       <footer className="site-footer">
         <p className="site-footer__text">
-          &copy; {new Date().getFullYear()} viettran Blog &mdash;{' '}
+          &copy; {new Date().getFullYear()} TECH2BLOGS &mdash;{' '}
           <Link to="/" className="site-footer__link">Home</Link>
         </p>
+        <p className="site-footer__credit">Made by Viet Tran Tuan</p>
       </footer>
     </>
   );

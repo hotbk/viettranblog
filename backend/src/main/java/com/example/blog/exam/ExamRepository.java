@@ -5,5 +5,6 @@ import java.util.List;
 
 public interface ExamRepository extends JpaRepository<Exam, Long> {
     List<Exam> findByStatusOrderByCreatedAtDesc(ExamStatus status);
+    List<Exam> findByStatusAndVisibilityOrderByCreatedAtDesc(ExamStatus status, ExamVisibility visibility);
     List<Exam> findAllByOrderByCreatedAtDesc();
 }

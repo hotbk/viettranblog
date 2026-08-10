@@ -6,6 +6,8 @@ import { fetchMemberExam, startAttempt, submitAttempt, UnauthorizedError } from 
 import { memberLogout } from '../memberAuth';
 import type { ExamDetailMember, AttemptDetail } from '../types';
 import NavBrand from '../components/NavBrand';
+import ThemeToggle from '../components/ThemeToggle';
+import NavUser from '../components/NavUser';
 
 type Phase = 'loading' | 'ready' | 'taking' | 'result' | 'error';
 
@@ -159,6 +161,8 @@ export default function MemberExamTake() {
           <NavBrand />
           <div className="site-nav__links">
             <Link to="/member/exams" className="site-nav__link">← Exams</Link>
+            <ThemeToggle />
+            <NavUser />
           </div>
         </div>
       </nav>
@@ -372,9 +376,10 @@ export default function MemberExamTake() {
 
       <footer className="site-footer">
         <p className="site-footer__text">
-          &copy; {new Date().getFullYear()} viettran Blog &mdash;{' '}
+          &copy; {new Date().getFullYear()} TECH2BLOGS &mdash;{' '}
           <Link to="/" className="site-footer__link">Home</Link>
         </p>
+        <p className="site-footer__credit">Made by Viet Tran Tuan</p>
       </footer>
     </>
   );

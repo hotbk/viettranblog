@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { fetchAdminAttempts, fetchAdminExams, UnauthorizedError } from '../api';
 import { logout } from '../auth';
+import ThemeToggle from '../components/ThemeToggle';
 import type { AdminAttemptSummary, ExamSummary } from '../types';
 
 function formatDuration(seconds: number | null): string {
@@ -24,7 +25,7 @@ function ScoreBadge({ score, total, scaledScore, scoreScale, passed }: {
 }) {
   if (scaledScore != null && scoreScale != null) {
     const pct = Math.round((scaledScore / scoreScale) * 100);
-    const color = pct >= 80 ? 'var(--color-success)' : pct >= 50 ? 'var(--color-warning, #f59e0b)' : 'var(--color-danger)';
+    const color = pct >= 80 ? 'var(--color-success)' : pct >= 50 ? 'var(--color-warning, #f59e0b)' : 'var(--color-error)';
     return (
       <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={{ fontWeight: 600, color }}>{scaledScore}/{scoreScale}</span>
@@ -38,7 +39,7 @@ function ScoreBadge({ score, total, scaledScore, scoreScale, passed }: {
   }
   if (score == null || total == null) return <span style={{ color: 'var(--color-text-muted)' }}>—</span>;
   const pct = total > 0 ? Math.round((score / total) * 100) : 0;
-  const color = pct >= 80 ? 'var(--color-success)' : pct >= 50 ? 'var(--color-warning, #f59e0b)' : 'var(--color-danger)';
+  const color = pct >= 80 ? 'var(--color-success)' : pct >= 50 ? 'var(--color-warning, #f59e0b)' : 'var(--color-error)';
   return <span style={{ fontWeight: 600, color }}>{score}/{total} <span style={{ fontSize: 12, fontWeight: 400 }}>({pct}%)</span></span>;
 }
 
@@ -91,14 +92,17 @@ export default function AdminAttempts() {
       <header className="admin-topbar">
         <div className="admin-topbar__inner">
           <div className="admin-topbar__brand">
-            <span className="admin-topbar__brand-name">viettran Blog</span>
+            <span className="admin-topbar__brand-name">TECH2BLOGS</span>
             <span className="admin-topbar__brand-sub">Admin Panel</span>
           </div>
           <div className="admin-topbar__actions">
+            <ThemeToggle />
             <Link to="/admin/posts" className="admin-topbar__view-site">Posts</Link>
             <Link to="/admin/series" className="admin-topbar__view-site">Series</Link>
             <Link to="/admin/exams" className="admin-topbar__view-site">Exams</Link>
             <Link to="/admin/users" className="admin-topbar__view-site">Users</Link>
+            <Link to="/admin/about" className="admin-topbar__view-site">About</Link>
+            <Link to="/admin/books" className="admin-topbar__view-site">Books</Link>
             <Link to="/" className="admin-topbar__view-site">View site &rarr;</Link>
             <button className="btn--topbar-logout" onClick={handleLogout}>Sign out</button>
           </div>

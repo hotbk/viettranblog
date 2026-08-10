@@ -1,5 +1,8 @@
 package com.example.blog.exam;
 
+import com.example.blog.access.ExamAccessGroupRepository;
+import com.example.blog.access.ExamAccessService;
+import com.example.blog.access.ExamUserPermissionRepository;
 import com.example.blog.common.NotFoundException;
 import com.example.blog.user.User;
 import com.example.blog.user.UserRepository;
@@ -23,17 +26,26 @@ public class ExamService {
     private final ExamAttemptRepository attemptRepository;
     private final ExamAnswerRepository answerRepository;
     private final UserRepository userRepository;
+    private final ExamAccessService examAccessService;
+    private final ExamAccessGroupRepository examAccessGroupRepository;
+    private final ExamUserPermissionRepository examUserPermissionRepository;
 
     public ExamService(ExamRepository examRepository,
                        QuestionRepository questionRepository,
                        ExamAttemptRepository attemptRepository,
                        ExamAnswerRepository answerRepository,
-                       UserRepository userRepository) {
+                       UserRepository userRepository,
+                       ExamAccessService examAccessService,
+                       ExamAccessGroupRepository examAccessGroupRepository,
+                       ExamUserPermissionRepository examUserPermissionRepository) {
         this.examRepository = examRepository;
         this.questionRepository = questionRepository;
         this.attemptRepository = attemptRepository;
         this.answerRepository = answerRepository;
         this.userRepository = userRepository;
+        this.examAccessService = examAccessService;
+        this.examAccessGroupRepository = examAccessGroupRepository;
+        this.examUserPermissionRepository = examUserPermissionRepository;
     }
 
     // ── Admin: Exam CRUD ─────────────────────────────────────────────────────
@@ -71,6 +83,11 @@ public class ExamService {
         if (!examRepository.existsById(id)) {
             throw new NotFoundException("EXAM_NOT_FOUND", "Exam not found");
         }
+        // Clean up the access grants first — no FK cascade from Exam to these
+        // join tables (they live in the access package), so deleting the exam
+        // first would violate the FK constraint if any grants exist.
+        examAccessGroupRepository.deleteByExamId(id);
+        examUserPermissionRepository.deleteByExamId(id);
         examRepository.deleteById(id);
     }
 
@@ -134,18 +151,36 @@ public class ExamService {
         return AdminAttemptDetailResponse.from(attempt);
     }
 
+    // ── Public: Exams (anonymous, unauthenticated) ──────────────────────────────
+
+    /** Never shows a PRIVATE exam — anonymous callers have no user to check group/direct grants against. */
+    @Transactional(readOnly = true)
+    public List<ExamSummaryResponse> listPublicExams() {
+        return examRepository.findByStatusAndVisibilityOrderByCreatedAtDesc(ExamStatus.PUBLISHED, ExamVisibility.PUBLIC)
+                .stream().map(ExamSummaryResponse::from).toList();
+    }
+
     // ── Member: Exams ────────────────────────────────────────────────────────
 
+    /** PUBLIC exams plus any PRIVATE exam the current member has been granted via group or direct assignment. */
     @Transactional(readOnly = true)
-    public List<ExamSummaryResponse> listPublishedExams() {
-        return examRepository.findByStatusOrderByCreatedAtDesc(ExamStatus.PUBLISHED).stream()
+    public List<ExamSummaryResponse> listPublishedExamsForMember() {
+        User user = currentUser();
+        List<Exam> published = examRepository.findByStatusOrderByCreatedAtDesc(ExamStatus.PUBLISHED);
+        Set<Long> accessibleIds = examAccessService.resolveAccessibleExamIds(user, published);
+        return published.stream()
+                .filter(exam -> accessibleIds.contains(exam.getId()))
                 .map(ExamSummaryResponse::from).toList();
     }
 
     @Transactional(readOnly = true)
     public ExamDetailMemberResponse getExamMember(Long id) {
         Exam exam = findExamOrThrow(id);
-        if (exam.getStatus() != ExamStatus.PUBLISHED) {
+        if (exam.getStatus() != ExamStatus.PUBLISHED || !examAccessService.canRead(currentUser(), exam)) {
+            // Same 404 either way — a member denied access never learns whether
+            // the exam exists at all, matching the exam module's existing
+            // not-found convention (findExamOrThrow) rather than leaking a
+            // separate "exists but you can't take it" signal.
             throw new NotFoundException("EXAM_NOT_FOUND", "Exam not found");
         }
         return ExamDetailMemberResponse.from(exam);
@@ -157,7 +192,10 @@ public class ExamService {
     public AttemptSummaryResponse startAttempt(Long examId) {
         User user = currentUser();
         Exam exam = findExamOrThrow(examId);
-        if (exam.getStatus() != ExamStatus.PUBLISHED) {
+        if (exam.getStatus() != ExamStatus.PUBLISHED || !examAccessService.canRead(user, exam)) {
+            // Re-checked here (not just in getExamMember) so a member can't
+            // bypass the access gate by POSTing straight to this endpoint
+            // without ever having listed/viewed the exam first.
             throw new NotFoundException("EXAM_NOT_FOUND", "Exam not found");
         }
         ExamAttempt attempt = new ExamAttempt();
@@ -282,6 +320,7 @@ public class ExamService {
         exam.setScoreScale(req.scoreScale());
         exam.setPassScore(req.passScore());
         exam.setStatus(parseStatus(req.status()));
+        exam.setVisibility(parseVisibility(req.visibility()));
     }
 
     private ExamStatus parseStatus(String status) {
@@ -289,6 +328,14 @@ public class ExamService {
             return ExamStatus.valueOf(status);
         } catch (Exception e) {
             return ExamStatus.DRAFT;
+        }
+    }
+
+    private ExamVisibility parseVisibility(String visibility) {
+        try {
+            return ExamVisibility.valueOf(visibility);
+        } catch (Exception e) {
+            return ExamVisibility.PUBLIC;
         }
     }
 

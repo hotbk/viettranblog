@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { fetchAdminExams, deleteExam, UnauthorizedError } from '../api';
 import { logout } from '../auth';
+import ThemeToggle from '../components/ThemeToggle';
 import type { ExamSummary } from '../types';
 
 interface Toast { id: number; message: string; type: 'success' | 'error'; }
@@ -69,14 +70,17 @@ export default function AdminExams() {
       <header className="admin-topbar">
         <div className="admin-topbar__inner">
           <div className="admin-topbar__brand">
-            <span className="admin-topbar__brand-name">viettran Blog</span>
+            <span className="admin-topbar__brand-name">TECH2BLOGS</span>
             <span className="admin-topbar__brand-sub">Admin Panel</span>
           </div>
           <div className="admin-topbar__actions">
+            <ThemeToggle />
             <Link to="/admin/posts" className="admin-topbar__view-site">Posts</Link>
             <Link to="/admin/series" className="admin-topbar__view-site">Series</Link>
             <Link to="/admin/users" className="admin-topbar__view-site">Users</Link>
             <Link to="/admin/attempts" className="admin-topbar__view-site">Attempts</Link>
+            <Link to="/admin/about" className="admin-topbar__view-site">About</Link>
+            <Link to="/admin/books" className="admin-topbar__view-site">Books</Link>
             <Link to="/" className="admin-topbar__view-site">View site &rarr;</Link>
             <button className="btn--topbar-logout" onClick={handleLogout}>Sign out</button>
           </div>
@@ -126,6 +130,7 @@ export default function AdminExams() {
                   <th>Questions</th>
                   <th>Time Limit</th>
                   <th>Status</th>
+                  <th>Visibility</th>
                   <th>Created</th>
                   <th style={{ width: 160 }}>Actions</th>
                 </tr>
@@ -149,6 +154,13 @@ export default function AdminExams() {
                       <span className={`badge ${exam.status === 'PUBLISHED' ? 'badge--published' : 'badge--draft'}`}>
                         {exam.status}
                       </span>
+                    </td>
+                    <td>
+                      {exam.visibility === 'PRIVATE' ? (
+                        <span className="badge badge--private" title="Private exam">🔒 Private</span>
+                      ) : (
+                        <span className="badge badge--public">Public</span>
+                      )}
                     </td>
                     <td style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>{formatDate(exam.createdAt)}</td>
                     <td>

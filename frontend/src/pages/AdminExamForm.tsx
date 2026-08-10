@@ -8,9 +8,12 @@ import {
   fetchAdminExam, createExam, updateExam,
   addQuestion, updateQuestion, deleteQuestion,
   uploadContentImage, UnauthorizedError,
+  fetchAccessGroups, fetchAdminUsers, fetchExamAccessGroups, fetchExamAccessUsers,
+  setExamAccessGroups as apiSetExamAccessGroups, setExamAccessUsers as apiSetExamAccessUsers,
 } from '../api';
 import { logout } from '../auth';
-import type { ExamDetailAdmin, QuestionAdmin, OptionAdmin, QuestionType } from '../types';
+import ThemeToggle from '../components/ThemeToggle';
+import type { ExamDetailAdmin, QuestionAdmin, OptionAdmin, QuestionType, ExamVisibility, AccessGroup, UserBrief } from '../types';
 
 interface Toast { id: number; message: string; type: 'success' | 'error'; }
 let toastId = 0;
@@ -73,6 +76,12 @@ export default function AdminExamForm() {
   const [scoreScale, setScoreScale] = useState('');
   const [passScore, setPassScore] = useState('');
   const [status, setStatus] = useState<'DRAFT' | 'PUBLISHED'>('DRAFT');
+  const [visibility, setVisibility] = useState<ExamVisibility>('PUBLIC');
+  const [availableGroups, setAvailableGroups] = useState<AccessGroup[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<UserBrief[]>([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>([]);
+  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
+  const [userSearch, setUserSearch] = useState('');
   const [examId, setExamId] = useState<number | null>(isEdit ? Number(id) : null);
   const [questions, setQuestions] = useState<QuestionDraft[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -100,6 +109,7 @@ export default function AdminExamForm() {
         setScoreScale(exam.scoreScale != null ? String(exam.scoreScale) : '');
         setPassScore(exam.passScore != null ? String(exam.passScore) : '');
         setStatus(exam.status as 'DRAFT' | 'PUBLISHED');
+        setVisibility(exam.visibility);
         setExamId(exam.id);
         setQuestions(exam.questions.map(questionFromApi));
         setLoadingExam(false);
@@ -113,6 +123,25 @@ export default function AdminExamForm() {
     return () => { cancelled = true; };
   }, [id, isEdit, navigate]);
 
+  // Load the group/user pickers only when Private is selected (avoids the
+  // extra requests for the common Public-exam case) — same pattern as PostForm.
+  useEffect(() => {
+    if (visibility !== 'PRIVATE') return;
+    fetchAccessGroups().then(setAvailableGroups).catch(() => setAvailableGroups([]));
+    fetchAdminUsers().then((users) =>
+      setAvailableUsers(users.map((u) => ({ id: u.id, username: u.username, email: u.email })))
+    ).catch(() => setAvailableUsers([]));
+  }, [visibility]);
+
+  // In edit mode, preload the exam's current groups/direct users once (independent
+  // of the visibility toggle above, so switching back and forth doesn't lose the selection).
+  useEffect(() => {
+    if (!isEdit || !examId) return;
+    fetchExamAccessGroups(examId).then((groups) => setSelectedGroupIds(groups.map((g) => g.id))).catch(() => {});
+    fetchExamAccessUsers(examId).then((users) => setSelectedUserIds(users.map((u) => u.id))).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [examId]);
+
   async function handleSaveMeta(e: React.FormEvent) {
     e.preventDefault();
     setMetaError(null);
@@ -124,6 +153,7 @@ export default function AdminExamForm() {
       scoreScale: scoreScale ? Number(scoreScale) : null,
       passScore: passScore ? Number(passScore) : null,
       status,
+      visibility,
     };
     try {
       let saved: ExamDetailAdmin;
@@ -134,6 +164,14 @@ export default function AdminExamForm() {
         setExamId(saved.id);
         navigate(`/admin/exams/${saved.id}/edit`, { replace: true });
       }
+      // Sync access groups/users after the exam itself is saved. Cleared to
+      // empty when switching back to Public, so no stale grants linger.
+      const groupIds = visibility === 'PRIVATE' ? selectedGroupIds : [];
+      const userIds = visibility === 'PRIVATE' ? selectedUserIds : [];
+      await Promise.all([
+        apiSetExamAccessGroups(saved.id, groupIds),
+        apiSetExamAccessUsers(saved.id, userIds),
+      ]);
       setMetaSaved(true);
       setTimeout(() => setMetaSaved(false), 2000);
       showToast(`"${saved.title}" saved.`, 'success');
@@ -274,10 +312,11 @@ export default function AdminExamForm() {
       <header className="admin-topbar">
         <div className="admin-topbar__inner">
           <div className="admin-topbar__brand">
-            <span className="admin-topbar__brand-name">viettran Blog</span>
+            <span className="admin-topbar__brand-name">TECH2BLOGS</span>
             <span className="admin-topbar__brand-sub">Admin Panel</span>
           </div>
           <div className="admin-topbar__actions">
+            <ThemeToggle />
             <Link to="/admin/exams" className="admin-topbar__view-site">← Exams</Link>
             <Link to="/" className="admin-topbar__view-site">View site &rarr;</Link>
             <button className="btn--topbar-logout" onClick={handleLogout}>Sign out</button>
@@ -352,6 +391,80 @@ export default function AdminExamForm() {
                         onClick={() => setStatus('PUBLISHED')}>Published</button>
                     </div>
                   </div>
+                  <div className="field">
+                    <label className="field__label">Visibility</label>
+                    <div className="status-toggle">
+                      <button type="button"
+                        className={`status-toggle__option${visibility === 'PUBLIC' ? ' status-toggle__option--active-published' : ''}`}
+                        onClick={() => setVisibility('PUBLIC')}>Public</button>
+                      <button type="button"
+                        className={`status-toggle__option${visibility === 'PRIVATE' ? ' status-toggle__option--active-draft' : ''}`}
+                        onClick={() => setVisibility('PRIVATE')}>🔒 Private</button>
+                    </div>
+                  </div>
+
+                  {visibility === 'PRIVATE' && (
+                    <div className="field field--full private-access-panel">
+                      <label className="field__label">Allowed Access Groups</label>
+                      {availableGroups.length === 0 ? (
+                        <p className="private-access-panel__empty">
+                          No access groups yet — create one under Admin → Access Groups.
+                        </p>
+                      ) : (
+                        <div className="checkbox-list">
+                          {availableGroups.map((group) => (
+                            <label key={group.id} className="checkbox-list__item">
+                              <input
+                                type="checkbox"
+                                checked={selectedGroupIds.includes(group.id)}
+                                onChange={(e) =>
+                                  setSelectedGroupIds((prev) =>
+                                    e.target.checked ? [...prev, group.id] : prev.filter((id) => id !== group.id)
+                                  )
+                                }
+                              />
+                              {group.name}
+                              {!group.enabled && <span className="checkbox-list__hint"> (disabled)</span>}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+
+                      <label className="field__label" style={{ marginTop: 16 }}>
+                        Specific Users <span style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>(exception access)</span>
+                      </label>
+                      <input
+                        className="field__input"
+                        type="text"
+                        placeholder="Search users by username or email..."
+                        value={userSearch}
+                        onChange={(e) => setUserSearch(e.target.value)}
+                        style={{ marginBottom: 8 }}
+                      />
+                      <div className="checkbox-list checkbox-list--scroll">
+                        {availableUsers
+                          .filter((u) =>
+                            !userSearch.trim()
+                            || u.username.toLowerCase().includes(userSearch.toLowerCase())
+                            || u.email.toLowerCase().includes(userSearch.toLowerCase())
+                          )
+                          .map((user) => (
+                            <label key={user.id} className="checkbox-list__item">
+                              <input
+                                type="checkbox"
+                                checked={selectedUserIds.includes(user.id)}
+                                onChange={(e) =>
+                                  setSelectedUserIds((prev) =>
+                                    e.target.checked ? [...prev, user.id] : prev.filter((id) => id !== user.id)
+                                  )
+                                }
+                              />
+                              {user.username} <span className="checkbox-list__hint">({user.email})</span>
+                            </label>
+                          ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="post-form-actions">
                   <button type="submit" className="btn btn--primary" disabled={savingMeta}>

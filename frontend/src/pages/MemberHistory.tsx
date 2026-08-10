@@ -4,6 +4,8 @@ import { fetchMyAttempts, UnauthorizedError } from '../api';
 import { memberLogout } from '../memberAuth';
 import type { AttemptSummary } from '../types';
 import NavBrand from '../components/NavBrand';
+import ThemeToggle from '../components/ThemeToggle';
+import NavUser from '../components/NavUser';
 
 function formatDate(s: string | null): string {
   if (!s) return '—';
@@ -59,6 +61,8 @@ export default function MemberHistory() {
             <Link to="/" className="site-nav__link">Home</Link>
             <Link to="/member/exams" className="site-nav__link">Exams</Link>
             <button className="btn btn--ghost btn--sm" onClick={handleLogout} style={{ marginLeft: 8 }}>Sign out</button>
+            <ThemeToggle />
+            <NavUser />
           </div>
         </div>
       </nav>
@@ -130,7 +134,7 @@ export default function MemberHistory() {
                     const scoreColor = p == null ? undefined
                       : p >= 80 ? 'var(--color-success)'
                       : p >= 50 ? 'var(--color-warning, #f59e0b)'
-                      : 'var(--color-danger)';
+                      : 'var(--color-error)';
                     return (
                       <tr key={a.id}>
                         <td>
@@ -185,9 +189,10 @@ export default function MemberHistory() {
 
       <footer className="site-footer">
         <p className="site-footer__text">
-          &copy; {new Date().getFullYear()} viettran Blog &mdash;{' '}
+          &copy; {new Date().getFullYear()} TECH2BLOGS &mdash;{' '}
           <Link to="/" className="site-footer__link">Home</Link>
         </p>
+        <p className="site-footer__credit">Made by Viet Tran Tuan</p>
       </footer>
     </>
   );
