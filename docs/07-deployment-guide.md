@@ -335,21 +335,63 @@ docker exec personal-blog-postgres psql -U blog_user -d personal_blog
 
 ### 5.3 Backup database
 
-Tạo backup:
+DB này lưu không chỉ nội dung bài viết mà cả ảnh, video, file đính kèm và ebook dưới dạng `bytea` (xem `docs/06-project-memory.md`, `docs/08-book-library-module.md`) — đây là điểm lưu trữ duy nhất cho toàn bộ nội dung người dùng, nên **bắt buộc phải backup định kỳ**, không chỉ backup thủ công khi nhớ ra.
+
+**Backup tự động (khuyến nghị) — script `scripts/backup-postgres.sh`:**
+
+Script chạy `pg_dump` với format custom (`-Fc`, đã nén sẵn, hỗ trợ `pg_restore --list` để kiểm tra file không hỏng và restore chọn lọc), ghi ra `backups/<db>-<timestamp>.dump` (thư mục này đã có trong `.gitignore`, **không commit** — chứa toàn bộ dữ liệu người dùng), và tự xoá các bản backup cũ hơn `RETENTION_DAYS` ngày (mặc định **14 ngày** — đủ cho 2 tuần rollback gần nhất mà không để dung lượng backup phình vô hạn, vì mỗi bản dump chứa toàn bộ ảnh/video/attachment/ebook hiện có).
+
+Chạy thủ công:
 
 ```bash
-docker exec personal-blog-postgres pg_dump \
-  -U blog_user personal_blog \
-  > backup-$(date +%Y%m%d-%H%M%S).sql
+./scripts/backup-postgres.sh
 ```
 
-Khôi phục từ backup:
+Có thể ghi đè các giá trị mặc định qua biến môi trường nếu cần (ví dụ khác container name, thư mục lưu backup ngoài repo, hoặc số ngày giữ backup):
 
 ```bash
-docker exec -i personal-blog-postgres psql \
-  -U blog_user personal_blog \
-  < backup-20260101-120000.sql
+CONTAINER_NAME=personal-blog-postgres DB_NAME=personal_blog DB_USER=blog_user \
+BACKUP_DIR=/opt/viettranblog/backups RETENTION_DAYS=14 \
+./scripts/backup-postgres.sh
 ```
+
+**Lên lịch chạy hàng ngày bằng cron (production):**
+
+Server production hiện tại (mục 4.0) đã dùng systemd cho backend, nhưng cho một tác vụ định kỳ đơn giản như backup thì `cron` là công cụ có sẵn, đơn giản nhất — đúng tinh thần MVP ("không thêm hệ thống orchestration mới", xem `CLAUDE.md`), nên không cần thêm systemd timer riêng.
+
+```bash
+crontab -e
+# Thêm dòng sau — chạy backup lúc 2:15 sáng hàng ngày (giờ ít traffic nhất),
+# log kết quả ra file riêng để kiểm tra khi cần:
+15 2 * * * /opt/viettranblog/scripts/backup-postgres.sh >> /opt/viettranblog/backups/backup.log 2>&1
+```
+
+> Đường dẫn `/opt/viettranblog` cần khớp với vị trí thực tế của repo trên server (xem `WorkingDirectory` trong systemd unit ở mục 4.4/4.0). Đảm bảo user chạy cron có quyền chạy `docker exec` (thường cần trong nhóm `docker`, hoặc chạy cron dưới root nếu server đã dùng root cho các cron job khác).
+
+**Khôi phục từ backup (`.dump`, custom format):**
+
+```bash
+docker exec -i personal-blog-postgres pg_restore \
+  -U blog_user -d personal_blog --clean --if-exists \
+  < backups/personal_blog-20260810-021500.dump
+```
+
+Backup dạng SQL thô (cách cũ, nếu vẫn còn file `.sql` từ trước) vẫn khôi phục được bằng `psql` như trước:
+
+```bash
+docker exec personal-blog-postgres pg_dump -U blog_user personal_blog > backup.sql
+docker exec -i personal-blog-postgres psql -U blog_user personal_blog < backup.sql
+```
+
+**Kiểm tra backup còn khôi phục được (sanity check định kỳ):**
+
+```bash
+docker exec -i personal-blog-postgres pg_restore --list < backups/personal_blog-<timestamp>.dump
+```
+
+Lệnh trên chỉ đọc mục lục (table of contents) trong file dump để xác nhận file **không bị hỏng/cắt ngắn** — đây **không phải** một restore drill đầy đủ (khôi phục vào một DB staging riêng rồi đối chiếu dữ liệu thực tế). Restore drill định kỳ đầy đủ nằm ngoài phạm vi MVP hiện tại; nên định kỳ (ví dụ hàng tháng) chạy lệnh `--list` này trên bản backup mới nhất như một mức kiểm tra tối thiểu, và cân nhắc bổ sung restore drill thật khi có môi trường staging riêng.
+
+**Lưu ý offsite / dung lượng:** Hiện tại `backups/` chỉ nằm trên cùng server với DB (`docker exec` chạy tại chỗ) — nếu mất cả server (ổ đĩa hỏng, xoá nhầm VPS...) thì backup cũng mất theo. Đây là rủi ro đã biết, chấp nhận được ở quy mô MVP hiện tại, nhưng nên cân nhắc thêm bước đồng bộ định kỳ (`rsync`/`scp` sang máy khác, hoặc upload sang một storage khác) khi dữ liệu quan trọng hơn. Theo dõi dung lượng `backups/` định kỳ vì DB chứa media nhị phân sẽ khiến dump lớn dần theo thời gian.
 
 ### 5.4 Cập nhật ứng dụng
 

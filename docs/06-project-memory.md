@@ -1326,3 +1326,172 @@ deliberate scope line, not an oversight). Neither reader's search checks
 against `TASK-BE-014` (highlights/annotations, still not designed) — the two
 features are unrelated (search doesn't persist anything), so no coupling risk
 there.
+
+Note (2026-08-10): the "still not designed" line above was stale by the time
+this was read back — `TASK-BE-014` (highlights) had in fact already shipped
+in the same working-tree batch as Phase 3, just not yet committed or recorded
+here. See the entry below.
+
+---
+
+### 2026-08-10 — Recovered 3 days of uncommitted work; split into 8 commits; merged to main (PR #2)
+
+Summary: The working tree had accumulated ~6,000 changed lines (68 modified +
+64 new files) entirely uncommitted since 2026-08-08 — auth/access-control
+foundation, video+YouTube embed (TASK-BE-010, the branch's namesake), post
+attachments/visibility, related posts, exam access control, About page +
+sitemap, Book Library Phase 1/2/3 (including highlights, which had no memory
+entry — see note above), and admin user management. One accidental
+`git checkout .` away from being lost.
+
+- Committed first as a single recovery snapshot (`wip/2026-08-10-snapshot`),
+  then split into 8 commits in dependency order (foundation → post → video →
+  exam → about/seo → book core → book highlights → route-wiring/docs), each
+  with its own scoped commit message — done via `git reset --soft` + staged
+  `git add` per file group, not `git rebase -i` (interactive git commands are
+  unavailable in this environment).
+- `text.txt` (contained the admin username/password) and a stray 2.8MB
+  `.mp4` test-upload artifact were kept untracked throughout — never entered
+  git history.
+- While writing commit messages, found two docs actively lying about shipped
+  work: `TASKS.md`'s `TASK-BE-014` said "NOT STARTED" and
+  `docs/09-book-highlights-phase2.md`'s header said "design only, not
+  implemented" — both fixed in the same batch (flipped to DONE/implemented,
+  with an accurate summary of what the code actually does), since leaving
+  them wrong risked a future agent redoing finished work per CLAUDE.md's
+  memory rules. `docs/04-api-contract.md` §12 had the same stale claim,
+  fixed too. `docs/03-architecture.md` was explicitly **not** rewritten in
+  this pass — flagged as follow-up, done in the next entry below.
+- `frontend/tsconfig.tsbuildinfo` (a build artifact) was untracked and
+  gitignored — it had been committed by mistake previously.
+- PR #2 (`wip/2026-08-10-snapshot` → `main`): backend CI passed first try
+  (real `mvn test` on GitHub Actions — this repo has no local Java/Maven, so
+  that run was the only real backend verification available). Frontend CI
+  failed on one pre-existing lint error (not introduced by the split):
+  `useBookHighlights.ts` called `setState` synchronously in a `useEffect`
+  early-return branch, violating `react-hooks/set-state-in-effect`. Fixed via
+  `queueMicrotask`, matching the same rule's existing workaround idiom in
+  `PdfReader.tsx`. CI went green, merged (fast-forward, no conflicts).
+
+Decisions:
+- Kept the branch name `wip/2026-08-10-snapshot` rather than renaming after
+  push — renaming just churns the PR URL; the commit split is what actually
+  makes the history reviewable.
+- Did not attempt a fully independent per-feature branch split — shared
+  files (`api.ts`, `types.ts`, `styles.css`, `App.tsx`, `SecurityConfig`,
+  `GlobalExceptionHandler`) are touched by nearly every feature and this
+  environment has no `git add -p`/interactive staging, so file-level (not
+  hunk-level) grouping was the ceiling of what was achievable. Documented as
+  a real limitation, not silently glossed over.
+
+Known gaps carried forward (see next entry for which were closed): no Flyway
+migrations (`ddl-auto: update` against production), no scheduled `pg_dump`,
+`docs/03-architecture.md` still describing a pre-auth 3-package MVP.
+
+---
+
+### 2026-08-10 — Flyway baseline, scheduled Postgres backups, architecture doc rewrite
+
+Summary: Closed the three gaps flagged by the architect-agent review
+recorded in the previous entry's "known gaps," via three parallel subagent
+tasks (backend-agent, devops-agent, architect-agent — non-overlapping files,
+reviewed and committed by the orchestrating session afterward, none of them
+committed/pushed themselves).
+
+**This session's environment has no `java`/`mvn`/working `docker` daemon at
+all** (`docker` CLI exists but `docker ps` → permission denied, no `sudo`
+without a TTY). Every backend/schema claim below was verified by reading
+source, not by compiling or running anything — stated explicitly per change
+so it isn't mistaken for a tested result.
+
+1. **Flyway** (`backend-agent`): added `flyway-core` +
+   `flyway-database-postgresql` to `backend/pom.xml`. New
+   `backend/src/main/resources/db/migration/V1__baseline.sql` — hand-derived
+   `CREATE TABLE` DDL for all 28 `@Entity` classes (+ the implicit
+   `exam_answer_selected_options` join table) found via
+   `grep -rl "@Entity" backend/src/main/java`, FK-ordered so it would run
+   top-to-bottom on an empty database. `application.yml`:
+   `spring.flyway.baseline-on-migrate: true` + `baseline-version: 1` (so the
+   *existing* production schema is marked "already at V1" on next boot
+   *without* Flyway executing V1's DDL against it — production tables are
+   never touched by this change), and `ddl-auto` changed `update` →
+   `validate` (Hibernate now fails fast on entity/schema drift instead of
+   silently altering the schema). `application-test.yml` got
+   `spring.flyway.enabled: false` — tests still run against H2 with
+   `ddl-auto: create-drop`, completely unaffected.
+   - **What is and isn't actually protected**: `ddl-auto: validate` compares
+     entities against the **live** database schema via JDBC introspection,
+     not against `V1__baseline.sql` — so the baseline file's accuracy only
+     matters for a *fresh* environment (new dev machine, disaster recovery),
+     not for whether production boots. Production boot risk instead comes
+     from `update` → `validate` itself: if years of `ddl-auto: update` left
+     any drift `update` mode silently tolerated (a type/length/nullable
+     mismatch it never retroactively fixed), the app will fail to start on
+     the next deploy — a safe failure mode (no data mutation) but still an
+     outage until fixed.
+   - **CI does not cover this.** Tests use H2 with Flyway disabled, so a
+     green `mvn test` on GitHub Actions (see previous entry) says nothing
+     about whether `V1__baseline.sql` is valid Postgres DDL or whether
+     `validate` mode will pass against the real production schema. Must be
+     checked with `pg_dump --schema-only` against production, or a real boot
+     against a copy of it, before the next production deploy — not inferred
+     from a green PR.
+2. **Backups** (`devops-agent`): new `scripts/backup-postgres.sh` —
+   `pg_dump -Fc` (custom format, supports `pg_restore --list` sanity-checks
+   and selective restore) against the `personal-blog-postgres` container,
+   written to `backups/` (gitignored — real user media/attachments/ebooks,
+   never committed), pruned after 14 days. Cron, not a new orchestration
+   tool (`15 2 * * * .../backup-postgres.sh`), matching CLAUDE.md's MVP
+   simplicity rule and the production host's existing plain-VPS setup.
+   Restore via `pg_restore --clean --if-exists`. `docs/07-deployment-guide.md`
+   §5.3 rewritten with all of the above. Explicitly documented as same-host
+   only (no offsite copy) and "`--list` is a corruption sanity-check, not a
+   full restore drill" — both real, accepted-for-MVP gaps, not hidden ones.
+3. **`docs/03-architecture.md`** (`architect-agent`): full rewrite, 107 →
+   ~450 lines. Added: real 18-package module map; the shared
+   PUBLIC/PRIVATE + access-group + direct-grant access-control model as its
+   own subsection (§4.2, now the doc's most important section — four domains
+   reuse it); binary-storage rationale + the concrete "~1GB of book-file
+   bytea" exit trigger for moving off `bytea`; ffmpeg as a stated hard
+   runtime dependency (and that CI doesn't install it); the Flyway/`validate`
+   schema-management model from point 1; frontend routing map, the two lazy
+   chunks (`mammoth`, `react-pdf`) and why, auth-token storage. Rewrote §6
+   Security entirely — it previously claimed "MVP does not include
+   authentication," which had been false for weeks. Two lines the rewrite
+   left stale (both said backups didn't exist) were caught and fixed in the
+   orchestrating session's review pass, since the backup task above landed
+   in the same batch but after the doc was written.
+   - Flagged by the architect-agent itself as worth double-checking: the
+     "~1GB" threshold is sourced from `docs/08-book-library-module.md` §1.5
+     as a *book-file-specifically* trigger, not a total-DB-size one — stated
+     that way on purpose, noted in case that reading is wrong; the exam
+     module's package-map line is name-based (controller/entity file names),
+     not a full relationship trace.
+
+Tests/checks: `npm run lint`/`typecheck`/`build` all clean (frontend-only
+changes were none here, so this was a sanity re-run). `mvn test` **not run —
+cannot be run in this environment**; will run for real on GitHub Actions CI
+when pushed, but see point 1's CI-coverage caveat above — a green run there
+still would not validate the Postgres-specific parts.
+
+Decisions:
+- Ran the three tasks as parallel background subagents against non-
+  overlapping file sets (Flyway: `pom.xml`/`application*.yml`/`db/migration/`;
+  backups: `scripts/`/`.gitignore`/`docs/07`; docs: `docs/03-architecture.md`
+  only) specifically so they could run concurrently without a merge
+  conflict; none was allowed to `git commit`/`git push` itself — the
+  orchestrating session reviewed every diff (including a manual read of the
+  full `V1__baseline.sql` for FK-ordering and syntax sanity) before
+  committing, since the Flyway change in particular carries production
+  startup risk that CI cannot catch.
+
+Known gaps carried forward:
+- `V1__baseline.sql` still needs a real diff against `pg_dump --schema-only`
+  of production before anyone relies on it for a fresh environment.
+- Backups are same-host only — no offsite copy.
+- `ffmpeg`/`ffprobe` still not installed in CI or confirmed on the
+  production host (architecture doc now states this plainly instead of
+  implying it's handled).
+- `docs/04-api-contract.md` still missing §13+ for six endpoint groups
+  (book highlights, access requests, audit log, sitemap, register/me, admin
+  user management) — flagged in the previous entry, not addressed here.
