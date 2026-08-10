@@ -27,6 +27,7 @@ import AboutPage from './pages/AboutPage';
 import LibraryPage from './pages/LibraryPage';
 import BookDetailPage from './pages/BookDetailPage';
 import BookReaderPage from './pages/BookReaderPage';
+import MyHighlightsPage from './pages/MyHighlightsPage';
 import MemberLogin from './pages/MemberLogin';
 import MemberRegister from './pages/MemberRegister';
 import MemberExams from './pages/MemberExams';
@@ -45,6 +46,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <Route path="/series/:slug" element={<SeriesDetail />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/library" element={<LibraryPage />} />
+        {/* Must come before /library/:slug — a static segment ranks higher in
+            React Router's matcher regardless of declaration order, but kept
+            here first anyway for readability. */}
+        <Route path="/library/highlights" element={<MyHighlightsPage />} />
         <Route path="/library/:slug" element={<BookDetailPage />} />
         <Route path="/library/:slug/read" element={<BookReaderPage />} />
         <Route path="/admin/login" element={<AdminLogin />} />

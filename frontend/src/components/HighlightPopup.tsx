@@ -38,11 +38,17 @@ export default function HighlightPopup({ rect, loggedIn, onPickColor, onAddNote,
       <div className="highlight-popup" style={computePopupStyle(rect)}>
         <span className="highlight-popup__signin-text">Sign in to save highlights</span>
         <button type="button" className="highlight-popup__signin-btn" onClick={onSignIn}>Sign in</button>
-        <button type="button" className="highlight-popup__close" onClick={onClose} aria-label="Dismiss">✕</button>
+        <button type="button" className="highlight-popup__close" onMouseDown={(e) => e.preventDefault()} onClick={onClose} aria-label="Dismiss">✕</button>
       </div>
     );
   }
 
+  // onMouseDown preventDefault on every button here: a plain click first fires
+  // mousedown, which by default steals focus from the document and collapses
+  // window.getSelection() *before* the click (and this component's onPickColor/
+  // onAddNote) ever runs — so the selection the reader just made would already
+  // be gone by the time we try to read it. Preventing mousedown's default
+  // keeps the selection alive through the click.
   return (
     <div className="highlight-popup" style={computePopupStyle(rect)}>
       {HIGHLIGHT_COLORS.map((color) => (
@@ -50,12 +56,13 @@ export default function HighlightPopup({ rect, loggedIn, onPickColor, onAddNote,
           key={color}
           type="button"
           className={`highlight-popup__swatch highlight-popup__swatch--${color.toLowerCase()}`}
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => onPickColor(color)}
           aria-label={`Highlight in ${color.toLowerCase()}`}
         />
       ))}
-      <button type="button" className="highlight-popup__note-btn" onClick={onAddNote}>+ Note</button>
-      <button type="button" className="highlight-popup__close" onClick={onClose} aria-label="Dismiss">✕</button>
+      <button type="button" className="highlight-popup__note-btn" onMouseDown={(e) => e.preventDefault()} onClick={onAddNote}>+ Note</button>
+      <button type="button" className="highlight-popup__close" onMouseDown={(e) => e.preventDefault()} onClick={onClose} aria-label="Dismiss">✕</button>
     </div>
   );
 }
