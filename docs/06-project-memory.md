@@ -1957,3 +1957,71 @@ pre-existing unrelated warnings in `HighlightPopup.tsx`), `npm run build`
 
 Follow-up: PR not yet opened for this change; still on
 `feature/TASK-FE-008-multilingual-frontend`.
+
+Pushed and opened update to PR #6 (bundles the multilingual feature, the
+api-contract doc fix, and this navbar fix):
+https://github.com/hotbk/viettranblog/pull/6
+
+## 2026-08-11 — Typography, category color-coding, dark-mode contrast fixes (frontend)
+
+Summary: addressed user design feedback (in Vietnamese) on a
+database/DevOps-branded blog: (1) technical labels (tags, category badges,
+inline/fenced code) used the same body font as prose, missing an
+opportunity to signal "technical"; (2) every category badge rendered in the
+identical brand-purple, so categories couldn't be told apart by color; (3)
+a real dark-mode bug — `.post-card__read-more` ("Read more") used
+`--color-navy` for both text and translucent background, and `--color-navy`
+is a fixed brand color that intentionally never lightens for dark mode
+(unlike `--color-text`/`--color-border`/etc.) — so in dark mode the button
+was near-black text on a near-black card: functionally invisible.
+
+Fix — typography: added `--font-mono` (JetBrains Mono, falling back to
+Fira Code/system mono) and applied it to `.post-card__tag`,
+`.post-detail__tag`, `.post-card__category`, `.post-detail__category`,
+`.related-posts__category`, `.inline-code`, and the two fenced-code
+`SyntaxHighlighter` instances (`PostDetail.tsx`, `PostForm.tsx`).
+
+Fix — category color-coding: added a 6-hue palette (`--cat-1..6-text/bg/
+border`, light + dark variants) and `.category-badge--1..6` classes in
+`styles.css`, plus `frontend/src/categoryColor.ts` — a deterministic
+string-hash (category name → 1 of 6 hues), not a lookup table, so any
+admin-entered category gets a stable distinct color with no code change.
+Wired into all 6 render sites: `App.tsx` (home PostCard), `LibraryPage.tsx`,
+`PostDetail.tsx`, `BookDetailPage.tsx`, `PostForm.tsx` (admin preview),
+`RelatedPosts.tsx`.
+
+Fix — dark-mode contrast bugs (the `--color-navy`-as-foreground-text
+anti-pattern, found by auditing every `color: var(--color-navy)` /
+`border-*-color: var(--color-navy)` usage): `.post-card__read-more`
+(reported bug), `.site-footer__link:hover`, `.exam-result-score__num`, and
+`.spinner`'s `border-top-color` (found during the audit, same root cause —
+navy spin segment on a dark-mode border ring was barely distinguishable).
+All switched to theme-aware tokens (`--color-text`, `--color-accent`).
+Also fixed `.inline-code`'s hardcoded `#f0f0f0` background, which had the
+mirror-image problem (light-mode-only background never darkened, so
+near-white article text in dark mode sat on a light box).
+
+Files touched: `frontend/src/styles.css`, `frontend/src/categoryColor.ts`
+(new), `frontend/src/App.tsx`, `frontend/src/pages/{LibraryPage,
+PostDetail,BookDetailPage,PostForm}.tsx`, `frontend/src/components/
+RelatedPosts.tsx`.
+
+Decision: did not touch the fenced-code-block Prism theme itself (`oneLight`
+stays light-only in both site themes) — swapping to a dark Prism theme in
+dark mode needs a live theme-change subscription (`getTheme()` is a
+snapshot read, not reactive) that doesn't exist yet; flagged as a
+follow-up, not fixed speculatively. Also left the admin-only `.badge--*`
+status pills (`AdminPosts.tsx` etc.) as self-contained light pastels —
+out of scope (not part of the reported public-page issue, and a larger
+separate pass).
+
+Checks run: `npm run typecheck` (clean), `npm run lint` (0 errors, 2
+pre-existing unrelated warnings), `npm run build` (succeeds).
+
+Known gaps / follow-ups:
+- Fenced code blocks (`SyntaxHighlighter`/`oneLight`) don't switch to a dark
+  Prism theme in dark mode — needs a reactive theme subscription, not just
+  `getTheme()`'s one-time read.
+- Admin `.badge--*` pills (draft/admin/editor/reader/etc.) are hardcoded
+  light-pastel and don't adapt to dark mode — cosmetic-only, admin area,
+  not reported by the user.

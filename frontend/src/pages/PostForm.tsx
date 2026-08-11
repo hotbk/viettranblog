@@ -20,6 +20,7 @@ import AttachmentManager from '../components/AttachmentManager';
 import TranslationsPanel from '../components/TranslationsPanel';
 import { alignCommands } from '../components/editorCommands';
 import type { BlogPost, PostVisibility, AccessGroup, UserBrief, ContentLanguage } from '../types';
+import { categoryColorClass } from '../categoryColor';
 
 const SQL_RE = /^(select|insert|update|delete|create|drop|alter|with|truncate|explain|grant|revoke|from|where)\s/i;
 const BASH_RE = /^(sudo|apt(-get)?|yum|dnf|brew|npm|yarn|pnpm|git|docker|kubectl|helm|curl|wget|ls|cd|mkdir|rmdir|rm|cp|mv|chmod|chown|grep|find|ps|kill|systemctl|service|cat|echo|export|source|python|pip|java|mvn|gradle)\s/i;
@@ -225,7 +226,7 @@ export default function PostForm({ initial, existingSlugs, onSave, onCancel }: P
           )}
 
           <div className="post-detail__category-row">
-            {category && <span className="post-detail__category">{category}</span>}
+            {category && <span className={`post-detail__category ${categoryColorClass(category)}`}>{category}</span>}
             <span className="post-detail__date">
               {status === 'PUBLISHED'
                 ? new Intl.DateTimeFormat('en-US', { dateStyle: 'long' }).format(new Date())
@@ -263,7 +264,7 @@ export default function PostForm({ initial, existingSlugs, onSave, onCancel }: P
                       style={oneLight}
                       language={match[1]}
                       PreTag="div"
-                      customStyle={{ borderRadius: 8, fontSize: 14, margin: '1em 0' }}
+                      customStyle={{ borderRadius: 8, fontSize: 14, margin: '1em 0', fontFamily: 'var(--font-mono)' }}
                     >
                       {String(children).replace(/\n$/, '')}
                     </SyntaxHighlighter>

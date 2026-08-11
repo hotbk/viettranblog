@@ -8,6 +8,7 @@ import { LANGUAGE_BCP47 } from '../types';
 import SiteNav from '../components/SiteNav';
 import TranslationSwitcher from '../components/TranslationSwitcher';
 import { useSeo } from '../useSeo';
+import { categoryColorClass } from '../categoryColor';
 
 const DENIAL_COPY: Record<AccessDenialCode, { title: string; desc: string }> = {
   NOT_AUTHENTICATED: {
@@ -141,7 +142,7 @@ export default function BookDetailPage() {
               )}
 
               <div className="post-detail__category-row">
-                {book.category && <span className="post-detail__category">{book.category}</span>}
+                {book.category && <span className={`post-detail__category ${categoryColorClass(book.category)}`}>{book.category}</span>}
                 <span className="post-detail__date">{book.fileType === 'PDF' ? 'PDF' : 'Text'}</span>
                 {book.fileSize != null && (
                   <span className="post-detail__date">{formatSize(book.fileSize)}</span>

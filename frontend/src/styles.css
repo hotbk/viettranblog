@@ -1,9 +1,10 @@
 /* ============================================================
    TECH2BLOGS — Design System
    Google Fonts: Inter (body) + Playfair Display (headings)
+              + JetBrains Mono (code, tags, category labels)
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 /* ── CSS Custom Properties ────────────────────────────────── */
 :root {
@@ -30,6 +31,25 @@
   /* Typography */
   --font-body:    'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-heading: 'Playfair Display', Georgia, serif;
+  /* Code, tags, category labels — a database/DevOps blog reads as more
+     "technical" when its jargon (#postgresql, DEVOPS, inline `code`) is set
+     apart from prose typographically, not just by color. */
+  --font-mono:    'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Category palette — 6 hues in the brand's saturation/weight range, picked
+     so a category can be told apart from across the room instead of reading
+     the label. Assignment is a deterministic hash of the category name (see
+     categoryColor.ts), not a fixed lookup table, so any admin-entered
+     category gets a stable, distinct hue with no code change. Dark-mode
+     variants are lightened (same treatment as --color-success/--color-error
+     above) — a 600/700-weight hex reads fine on white but disappears against
+     a near-black tinted chip background. */
+  --cat-1-text: #2e3ecf; --cat-1-bg: rgba(61,79,232,0.10); --cat-1-border: rgba(61,79,232,0.28);
+  --cat-2-text: #0f766e; --cat-2-bg: rgba(13,148,136,0.10); --cat-2-border: rgba(13,148,136,0.28);
+  --cat-3-text: #b45309; --cat-3-bg: rgba(217,119,6,0.10); --cat-3-border: rgba(217,119,6,0.28);
+  --cat-4-text: #7c3aed; --cat-4-bg: rgba(124,58,237,0.10); --cat-4-border: rgba(124,58,237,0.28);
+  --cat-5-text: #be185d; --cat-5-bg: rgba(190,24,93,0.10); --cat-5-border: rgba(190,24,93,0.28);
+  --cat-6-text: #0369a1; --cat-6-bg: rgba(3,105,161,0.10); --cat-6-border: rgba(14,165,233,0.28);
 
   /* Spacing */
   --radius-sm:  6px;
@@ -70,6 +90,13 @@
   --color-success:     #34d399;
   --color-success-bg:  #10261c;
   --color-success-border:#1f5c40;
+
+  --cat-1-text: #8b93f5; --cat-1-bg: rgba(99,110,241,0.16); --cat-1-border: rgba(99,110,241,0.34);
+  --cat-2-text: #5eead4; --cat-2-bg: rgba(45,212,191,0.16); --cat-2-border: rgba(45,212,191,0.34);
+  --cat-3-text: #fcd34d; --cat-3-bg: rgba(251,191,36,0.16); --cat-3-border: rgba(251,191,36,0.34);
+  --cat-4-text: #c4b5fd; --cat-4-bg: rgba(167,139,250,0.16); --cat-4-border: rgba(167,139,250,0.34);
+  --cat-5-text: #f9a8d4; --cat-5-bg: rgba(244,114,182,0.16); --cat-5-border: rgba(244,114,182,0.34);
+  --cat-6-text: #7dd3fc; --cat-6-bg: rgba(56,189,248,0.16); --cat-6-border: rgba(56,189,248,0.34);
 }
 
 /* ── Reset & Base ─────────────────────────────────────────── */
@@ -579,6 +606,7 @@ img {
 
 .post-card__category {
   display: inline-block;
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
@@ -589,6 +617,18 @@ img {
   padding: 3px 10px;
   border-radius: var(--radius-full);
 }
+
+/* One hue per category (assigned by categoryColor.ts's hash of the category
+   name — see the --cat-N-* token comment above) so a reader can tell
+   categories apart by color, not just by reading the label. Same specificity
+   as .post-card__category/.post-detail__category/.related-posts__category —
+   relies on appearing later in the cascade to win on color/background/border. */
+.category-badge--1 { color: var(--cat-1-text); background: var(--cat-1-bg); border-color: var(--cat-1-border); }
+.category-badge--2 { color: var(--cat-2-text); background: var(--cat-2-bg); border-color: var(--cat-2-border); }
+.category-badge--3 { color: var(--cat-3-text); background: var(--cat-3-bg); border-color: var(--cat-3-border); }
+.category-badge--4 { color: var(--cat-4-text); background: var(--cat-4-bg); border-color: var(--cat-4-border); }
+.category-badge--5 { color: var(--cat-5-text); background: var(--cat-5-bg); border-color: var(--cat-5-border); }
+.category-badge--6 { color: var(--cat-6-text); background: var(--cat-6-bg); border-color: var(--cat-6-border); }
 
 .post-card__date {
   font-size: 12px;
@@ -638,6 +678,7 @@ img {
 }
 
 .post-card__tag {
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 500;
   color: var(--color-text-muted);
@@ -665,9 +706,14 @@ img {
   gap: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--color-navy);
-  background: rgba(26,39,68,0.06);
-  border: 1.5px solid rgba(26,39,68,0.12);
+  /* Was hardcoded to --color-navy (#12151c) on an rgba(26,39,68,…) tint —
+     --color-navy is a fixed dark brand color that never flips for dark mode
+     (see the note on the :root[data-theme='dark'] block), so in dark mode
+     this rendered as near-black text on a near-black card: invisible. Use
+     the theme-aware ink/border tokens instead, same pattern as .btn--ghost. */
+  color: var(--color-text);
+  background: var(--color-border-soft);
+  border: 1.5px solid var(--color-border);
   border-radius: var(--radius-full);
   padding: 6px 16px;
   cursor: pointer;
@@ -787,11 +833,17 @@ img {
 }
 
 .related-posts__category {
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--color-accent-dark);
+  /* Plain text label, not a chip — a .category-badge--N class still applies
+     here for its `color`, but neutralize the bg/border it also carries
+     (those are meant for the padded pill badges, not a bare label). */
+  background: none;
+  border: none;
 }
 
 .related-posts__item-title {
@@ -1073,12 +1125,17 @@ img {
 }
 
 .post-detail__category {
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--color-accent-dark);
   background: rgba(61,79,232,0.1);
+  /* Transparent by default so a .category-badge--N class (same specificity)
+     can win on border-color; border-style must exist or border-color alone
+     renders nothing. */
+  border: 1px solid transparent;
   padding: 4px 12px;
   border-radius: var(--radius-full);
 }
@@ -1150,6 +1207,7 @@ img {
 }
 
 .post-detail__tag {
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 500;
   color: var(--color-text-muted);
@@ -1225,11 +1283,15 @@ img {
 }
 
 .inline-code {
-  background: #f0f0f0;
+  /* Was a hardcoded light gray that never adapted for dark mode — near-white
+     article text on this background read almost as poorly as the read-more
+     button bug above. --color-border-soft already flips correctly. */
+  background: var(--color-border-soft);
+  color: var(--color-text);
   border-radius: 4px;
   padding: 2px 6px;
   font-size: 0.88em;
-  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  font-family: var(--font-mono);
 }
 
 /* Reading progress bar */
@@ -1283,7 +1345,11 @@ img {
   width: 36px;
   height: 36px;
   border: 3px solid var(--color-border);
-  border-top-color: var(--color-navy);
+  /* Same dark-mode fix as .post-card__read-more: --color-navy (#12151c)
+     against --color-border's dark-mode value (#262b36) barely showed a
+     spinning segment. --color-accent stays a vivid, constant blue-purple
+     in both themes, so it doesn't need a dark-mode variant to stay visible. */
+  border-top-color: var(--color-accent);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
@@ -1471,7 +1537,11 @@ img {
 }
 
 .site-footer__link:hover {
-  color: var(--color-navy);
+  /* Same dark-mode fix as .post-card__read-more: --color-navy is a fixed
+     dark brand color, not a theme-aware ink token — it never lightens for
+     dark mode, so hovering here on a dark-mode footer (which sits on
+     --color-bg, itself dark) used to fade the link to near-invisible. */
+  color: var(--color-text);
 }
 
 .site-footer__credit {
@@ -3342,7 +3412,10 @@ img {
 .exam-result-score__num {
   font-size: 56px;
   font-weight: 800;
-  color: var(--color-navy);
+  /* Same dark-mode fix as .post-card__read-more — --color-navy is a fixed
+     dark brand color that never lightens for dark mode, and this number
+     sits directly on the page background, which does go dark. */
+  color: var(--color-text);
   font-family: var(--font-heading);
   line-height: 1;
 }

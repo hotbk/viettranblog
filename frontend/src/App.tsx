@@ -5,6 +5,7 @@ import type { BlogPost, ExamSummary } from './types';
 import { isMemberAuthenticated } from './memberAuth';
 import SiteNav from './components/SiteNav';
 import { useSeo } from './useSeo';
+import { categoryColorClass } from './categoryColor';
 import { getLanguagePreference, languageQueryParam, setLanguagePreference, type LanguagePreference } from './contentLanguage';
 
 const HOME_DESCRIPTION =
@@ -272,7 +273,7 @@ function PostCard({ post }: { post: BlogPost }) {
       )}
       <div className="post-card__meta">
         {post.category && (
-          <span className="post-card__category">{post.category}</span>
+          <span className={`post-card__category ${categoryColorClass(post.category)}`}>{post.category}</span>
         )}
         <span className="post-card__date">{formatDate(post.publishedAt)}</span>
         {post.visibility === 'PRIVATE' && (

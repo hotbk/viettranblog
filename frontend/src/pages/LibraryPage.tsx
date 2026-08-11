@@ -7,6 +7,7 @@ import { isMemberAuthenticated } from '../memberAuth';
 import SiteNav from '../components/SiteNav';
 import { useSeo } from '../useSeo';
 import { getLanguagePreference, languageQueryParam, setLanguagePreference, type LanguagePreference } from '../contentLanguage';
+import { categoryColorClass } from '../categoryColor';
 
 const FILE_TYPE_LABEL: Record<string, string> = { PDF: 'PDF', TXT: 'Text' };
 
@@ -211,7 +212,7 @@ function BookCard({ book }: { book: Book }) {
         </div>
       )}
       <div className="post-card__meta">
-        {book.category && <span className="post-card__category">{book.category}</span>}
+        {book.category && <span className={`post-card__category ${categoryColorClass(book.category)}`}>{book.category}</span>}
         <span className="post-card__date">{FILE_TYPE_LABEL[book.fileType]}{book.fileSize ? ` · ${formatSize(book.fileSize)}` : ''}</span>
         {book.locked && <span className="post-card__private-badge" title="Private book">🔒 Private</span>}
       </div>

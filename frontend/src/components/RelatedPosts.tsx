@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchRelatedPosts } from '../api';
 import type { RelatedPost } from '../types';
+import { categoryColorClass } from '../categoryColor';
 
 function formatDate(value: string | null): string {
   if (!value) return '';
@@ -61,7 +62,7 @@ export default function RelatedPosts({ slug }: { slug: string }) {
                 )}
                 <div className="related-posts__body">
                   {post.category && (
-                    <span className="related-posts__category">{post.category}</span>
+                    <span className={`related-posts__category ${categoryColorClass(post.category)}`}>{post.category}</span>
                   )}
                   <span className="related-posts__item-title">{post.title}</span>
                   {post.publishedAt && (

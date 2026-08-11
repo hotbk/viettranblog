@@ -15,6 +15,7 @@ import PostAttachments from '../components/PostAttachments';
 import TranslationSwitcher from '../components/TranslationSwitcher';
 import { useSeo } from '../useSeo';
 import { LANGUAGE_BCP47 } from '../types';
+import { categoryColorClass } from '../categoryColor';
 
 const DENIAL_COPY: Record<AccessDenialCode, { title: string; desc: string }> = {
   NOT_AUTHENTICATED: {
@@ -215,7 +216,7 @@ export default function PostDetail() {
             <article>
               <div className="post-detail__category-row">
                 {post.category && (
-                  <span className="post-detail__category">{post.category}</span>
+                  <span className={`post-detail__category ${categoryColorClass(post.category)}`}>{post.category}</span>
                 )}
                 <span className="post-detail__date">{formatDate(post.publishedAt)}</span>
                 <span className="post-detail__reading-time">{readingTime(post.content)}</span>
@@ -290,7 +291,7 @@ export default function PostDetail() {
                           style={oneLight}
                           language={match[1]}
                           PreTag="div"
-                          customStyle={{ borderRadius: 8, fontSize: 14, margin: '1em 0' }}
+                          customStyle={{ borderRadius: 8, fontSize: 14, margin: '1em 0', fontFamily: 'var(--font-mono)' }}
                         >
                           {String(children).replace(/\n$/, '')}
                         </SyntaxHighlighter>
