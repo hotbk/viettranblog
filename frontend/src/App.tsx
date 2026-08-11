@@ -2,12 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchPosts, fetchPublicExams } from './api';
 import type { BlogPost, ExamSummary } from './types';
-import { isAuthenticated } from './auth';
 import { isMemberAuthenticated } from './memberAuth';
-import NavBrand from './components/NavBrand';
-import ThemeToggle from './components/ThemeToggle';
-import LanguageToggle from './components/LanguageToggle';
-import NavUser from './components/NavUser';
+import SiteNav from './components/SiteNav';
 import { useSeo } from './useSeo';
 import { getLanguagePreference, languageQueryParam, setLanguagePreference, type LanguagePreference } from './contentLanguage';
 
@@ -95,35 +91,10 @@ export default function App() {
     },
   });
 
-  const authenticated = isAuthenticated();
-
   return (
     <>
       {/* ── Navbar ─────────────────────────────── */}
-      <nav className="site-nav">
-        <div className="site-nav__inner">
-          <NavBrand />
-          <div className="site-nav__links">
-            <Link to="/" className="site-nav__link">Home</Link>
-            <Link to="/series" className="site-nav__link">Series</Link>
-            <Link to="/library" className="site-nav__link">Library</Link>
-            <Link to="/about" className="site-nav__link">About</Link>
-            {isMember ? (
-              <Link to="/member/exams" className="site-nav__link">Exams</Link>
-            ) : (
-              <Link to="/member/login" className="site-nav__link">Exams</Link>
-            )}
-            {authenticated ? (
-              <Link to="/admin/posts" className="site-nav__link site-nav__link--accent">Admin</Link>
-            ) : (
-              <Link to="/admin/login" className="site-nav__link">Admin</Link>
-            )}
-            <LanguageToggle onChange={setLanguagePref} />
-            <ThemeToggle />
-            <NavUser />
-          </div>
-        </div>
-      </nav>
+      <SiteNav active="home" onLanguageChange={setLanguagePref} />
 
       {/* ── Hero ───────────────────────────────── */}
       <section className="hero">

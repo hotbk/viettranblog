@@ -4,9 +4,7 @@ import { fetchMyHighlights, updateBookHighlightNote, deleteBookHighlight, Highli
 import type { MyBookHighlight } from '../types';
 import { isAuthenticated } from '../auth';
 import { isMemberAuthenticated } from '../memberAuth';
-import NavBrand from '../components/NavBrand';
-import ThemeToggle from '../components/ThemeToggle';
-import NavUser from '../components/NavUser';
+import SiteNav from '../components/SiteNav';
 import HighlightNoteEditor from '../components/HighlightNoteEditor';
 import { useSeo } from '../useSeo';
 
@@ -76,18 +74,7 @@ export default function MyHighlightsPage() {
 
   return (
     <>
-      <nav className="site-nav">
-        <div className="site-nav__inner">
-          <NavBrand />
-          <div className="site-nav__links">
-            <Link to="/" className="site-nav__link">Home</Link>
-            <Link to="/library" className="site-nav__link">Library</Link>
-            <Link to="/about" className="site-nav__link">About</Link>
-            <ThemeToggle />
-            <NavUser />
-          </div>
-        </div>
-      </nav>
+      <SiteNav active="library" />
 
       <section className="hero">
         <div className="hero__inner">

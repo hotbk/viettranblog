@@ -4,10 +4,7 @@ import { fetchBooks, fetchContinueReading } from '../api';
 import type { Book } from '../types';
 import { isAuthenticated } from '../auth';
 import { isMemberAuthenticated } from '../memberAuth';
-import NavBrand from '../components/NavBrand';
-import ThemeToggle from '../components/ThemeToggle';
-import LanguageToggle from '../components/LanguageToggle';
-import NavUser from '../components/NavUser';
+import SiteNav from '../components/SiteNav';
 import { useSeo } from '../useSeo';
 import { getLanguagePreference, languageQueryParam, setLanguagePreference, type LanguagePreference } from '../contentLanguage';
 
@@ -86,20 +83,11 @@ export default function LibraryPage() {
 
   return (
     <>
-      <nav className="site-nav">
-        <div className="site-nav__inner">
-          <NavBrand />
-          <div className="site-nav__links">
-            <Link to="/" className="site-nav__link">Home</Link>
-            <Link to="/library" className="site-nav__link site-nav__link--active">Library</Link>
-            {loggedIn && <Link to="/library/highlights" className="site-nav__link">My Highlights</Link>}
-            <Link to="/about" className="site-nav__link">About</Link>
-            <LanguageToggle onChange={setLanguagePref} />
-            <ThemeToggle />
-            <NavUser />
-          </div>
-        </div>
-      </nav>
+      <SiteNav
+        active="library"
+        onLanguageChange={setLanguagePref}
+        extra={loggedIn && <Link to="/library/highlights" className="site-nav__link">My Highlights</Link>}
+      />
 
       <section className="hero">
         <div className="hero__inner">

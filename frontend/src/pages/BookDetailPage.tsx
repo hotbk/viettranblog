@@ -5,9 +5,7 @@ import rehypeRaw from 'rehype-raw';
 import { fetchBookBySlug, BookAccessDeniedError } from '../api';
 import type { Book, AccessDenialCode } from '../types';
 import { LANGUAGE_BCP47 } from '../types';
-import NavBrand from '../components/NavBrand';
-import ThemeToggle from '../components/ThemeToggle';
-import NavUser from '../components/NavUser';
+import SiteNav from '../components/SiteNav';
 import TranslationSwitcher from '../components/TranslationSwitcher';
 import { useSeo } from '../useSeo';
 
@@ -96,17 +94,7 @@ export default function BookDetailPage() {
 
   return (
     <>
-      <nav className="site-nav">
-        <div className="site-nav__inner">
-          <NavBrand />
-          <div className="site-nav__links">
-            <Link to="/" className="site-nav__link">Home</Link>
-            <Link to="/library" className="site-nav__link">Library</Link>
-            <ThemeToggle />
-            <NavUser />
-          </div>
-        </div>
-      </nav>
+      <SiteNav active="library" />
 
       <div className="post-detail-page">
         <div className="post-detail__narrow">

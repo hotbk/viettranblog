@@ -1915,5 +1915,45 @@ Known gaps / follow-ups:
   the row being edited — only a full reload shows the sibling's updated
   visibility/access badge. Low priority: the underlying access control is
   correct, this is purely an admin-UI staleness cosmetic issue.
-- Everything in this working tree (FE-L1 through FE-L6 for `TASK-FE-008`) is
-  still uncommitted — no branch/PR opened yet.
+- Correction (2026-08-11): the above is stale. `TASK-FE-008` (dual-language
+  content, FE-L1 through FE-L6) is committed as `3310814` on
+  `feature/TASK-FE-008-multilingual-frontend`; a follow-up api-contract fix
+  is `eca5d6f` on the same branch. Branch/PR to `main` still not opened.
+
+## 2026-08-11 — Navbar consistency fix (frontend)
+
+Summary: fixed the primary site navbar showing a different link set on
+almost every page (reported by user: Home had
+Home/Series/Library/About/Exams/Admin/language-toggle, but Series was
+missing Exams+Admin, Library swapped in "My Highlights" and dropped
+Series+Exams+Admin, About/PostDetail were missing Series+Exams+Admin, and
+`SeriesDetail` never even highlighted "Series" as active). Root cause: no
+shared nav component — 14 files each hand-copied the `<nav className=
+"site-nav">...</nav>` markup independently and had drifted over time.
+
+Fix: added `frontend/src/components/SiteNav.tsx` as the single source of
+truth for the primary navbar (Home/Series/Library/About/Exams/Admin +
+LanguageToggle/ThemeToggle/NavUser, same set and order as the former Home
+navbar), with an `active` prop for section highlighting and a narrow `extra`
+slot for one page-specific link (used only by Library, for "My Highlights"
+when signed in) so the core set can't silently change shape again.
+
+Files touched: `frontend/src/components/SiteNav.tsx` (new); swapped the
+duplicated nav block for `<SiteNav .../>` in `App.tsx`, `SeriesList.tsx`,
+`SeriesDetail.tsx`, `LibraryPage.tsx`, `BookDetailPage.tsx`, `AboutPage.tsx`,
+`PostDetail.tsx`, `MyHighlightsPage.tsx`.
+
+Scope decision: the 6 member-flow pages (`MemberLogin`, `MemberRegister`,
+`MemberExams`, `MemberExamTake`, `MemberAttemptResult`, `MemberHistory`)
+were left with their own minimal/focused nav (e.g. "← Exams" only) —
+treated as an intentionally distinct auth-entry / exam-taking flow, not
+part of the public-browsing navbar the user flagged. Not fixed in this
+pass; flag if the same drift is wanted fixed there too.
+
+Checks run: `npm run typecheck` (clean), `npm run lint` (0 errors, 2
+pre-existing unrelated warnings in `HighlightPopup.tsx`), `npm run build`
+(succeeds). No new automated test added (no frontend test runner exists yet
+— tracked separately in the 2026-08-10/11 architecture review).
+
+Follow-up: PR not yet opened for this change; still on
+`feature/TASK-FE-008-multilingual-frontend`.
