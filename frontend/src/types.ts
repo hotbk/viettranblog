@@ -296,7 +296,7 @@ export interface BlogPost {
   translations: TranslationRef[];
 }
 
-export type AttachmentType = 'PDF' | 'DOC' | 'DOCX' | 'TXT';
+export type AttachmentType = 'PDF' | 'DOC' | 'DOCX' | 'TXT' | 'MD' | 'ZIP';
 
 export interface PostAttachment {
   id: number;

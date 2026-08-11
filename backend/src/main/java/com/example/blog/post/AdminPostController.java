@@ -54,7 +54,7 @@ public class AdminPostController {
         postService.markTranslationReviewed(id);
     }
 
-    // --- attachments (PDF/DOC/DOCX/TXT) ---
+    // --- attachments (PDF/DOC/DOCX/TXT/MD/ZIP) ---
 
     @GetMapping("/{id}/attachments")
     public List<PostAttachmentResponse> listAttachments(@PathVariable Long id) {

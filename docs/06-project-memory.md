@@ -2117,3 +2117,58 @@ geometry is hand-duplicated between `NavBrand.tsx` and `favicon.svg`
 share a single source) — same category of drift risk as the pre-fix
 navbar-link duplication, just lower blast radius since it's presentational
 and only 2 copies. Not fixed; flagging for awareness.
+
+## 2026-08-11 — Post attachments: add MD and ZIP
+
+Summary: user asked to add `.md` and `.zip` as attachable file types
+(previously PDF/DOC/DOCX/TXT only). Straightforward on its face, but
+classification was MIME-type-keyed (`file.getContentType()` from the
+multipart request), and `.md` in particular has no universally registered
+MIME type — many browsers/OSes send `""` or a generic
+`application/octet-stream` for it, which would have silently rejected
+most real-world markdown uploads had the existing pattern just been
+extended with a `"text/markdown"` map entry.
+
+Fix: switched classification (and the `contentType` stored/served back) to
+be **filename-extension-based** instead of trusting the client's
+Content-Type header — `PostAttachmentService.ALLOWED_EXTENSIONS` (ext →
+`AttachmentType`) and `CANONICAL_CONTENT_TYPES` (`AttachmentType` → the
+MIME type this app always serves, regardless of what the browser claimed
+at upload time). No weaker a check than before — extension is exactly as
+client-controlled as Content-Type was — just one that actually works for
+`.md`. Frontend's client-side pre-check (`AttachmentManager.tsx`) mirrors
+the same extension-based logic so the instant-feedback error message
+agrees with what the server will do.
+
+Viewer (`PostAttachments.tsx`): `.md` renders through the same
+`ReactMarkdown` already used for post bodies (already in the main bundle
+via `PostDetail.tsx`, no new chunk) — introduced a shared
+`.attachment-modal__prose` CSS class so MD and DOCX (mammoth-rendered) share
+layout without MD content sitting under a class literally named `docx`.
+`.zip` gets the same "no in-browser preview, download only" treatment as
+legacy `.doc` — extended `PostController.getAttachment`'s
+`ContentDisposition: attachment` (force-download) branch to include ZIP
+alongside DOC.
+
+Files touched: `backend/.../post/{AttachmentType,PostAttachmentService,
+PostController,PostAttachment,AdminPostController}.java`,
+`backend/.../post/PostAttachmentControllerTest.java` (new tests: MD upload
+with an unhelpful Content-Type to prove the fix matters, ZIP upload +
+force-download disposition, extension-mismatch-with-allowed-Content-Type
+rejection), `frontend/src/types.ts`, `frontend/src/api.ts` (comment only),
+`frontend/src/components/{AttachmentManager,PostAttachments}.tsx`,
+`frontend/src/styles.css`, `docs/04-api-contract.md` (added the
+extension→type→contentType table), `docs/03-architecture.md`.
+
+Checks run: `mvn test` — full backend suite, 145/145 passing (run via
+`/home/setup/.local/jdk21/bin` + `/home/setup/.local/maven/bin`, not on
+PATH by default in this environment). `npm run typecheck`/`lint`/`build`
+— all clean.
+
+Decision: did not add magic-byte/content-sniffing validation (e.g.
+verifying a `.zip` upload is really a ZIP by its header bytes) — would be
+real defense-in-depth but is more than this MVP's existing attachment
+validation ever did for the other 4 types, and out of scope for a
+"add two more extensions" request. Noted as a possible future hardening
+step, not a regression introduced here (the extension-only check is
+exactly as strong as the content-type-only check it replaced).

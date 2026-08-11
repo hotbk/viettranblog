@@ -35,8 +35,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-/** Upload / view / delete for post attachments (PDF/DOC/DOCX/TXT), including the
- * private-post access gate that content_images/content_videos don't have. */
+/** Upload / view / delete for post attachments (PDF/DOC/DOCX/TXT/MD/ZIP), including
+ * the private-post access gate that content_images/content_videos don't have. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -84,7 +84,54 @@ class PostAttachmentControllerTest {
     }
 
     @Test
-    void uploadRejectsDisallowedContentType() throws Exception {
+    void uploadValidMarkdownSucceedsEvenWithUnreliableBrowserContentType() throws Exception {
+        // Regression test for the extension-based classification switch: many
+        // browsers/OSes have no registered MIME type for .md and send "" or a
+        // generic fallback instead of "text/markdown" — simulate that here rather
+        // than the "nice" content type, since that's the real-world case this
+        // fix exists for.
+        String token = adminToken();
+        long postId = createPost(token, "pa-md-post");
+
+        MockMultipartFile md = new MockMultipartFile(
+                "file", "README.md", "application/octet-stream", "# Notes\n\nSome **markdown**.".getBytes());
+
+        mockMvc.perform(multipart("/api/admin/posts/{id}/attachments", postId)
+                        .file(md)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.originalFilename").value("README.md"))
+                .andExpect(jsonPath("$.attachmentType").value("MD"));
+
+        mockMvc.perform(get("/api/posts/pa-md-post"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.attachments[0].attachmentType").value("MD"));
+    }
+
+    @Test
+    void uploadValidZipSucceedsAndForcesDownloadDisposition() throws Exception {
+        String token = adminToken();
+        long postId = createPost(token, "pa-zip-post");
+
+        MockMultipartFile zip = new MockMultipartFile("file", "bundle.zip", "application/zip", minimalZipBytes());
+
+        MvcResult uploadResult = mockMvc.perform(multipart("/api/admin/posts/{id}/attachments", postId)
+                        .file(zip)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.attachmentType").value("ZIP"))
+                .andReturn();
+        long attachmentId = objectMapper.readTree(uploadResult.getResponse().getContentAsString()).get("id").asLong();
+
+        // ZIP has no safe in-browser renderer, same as legacy DOC — force download.
+        mockMvc.perform(get("/api/posts/{id}/attachments/{attachmentId}", postId, attachmentId))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("application/zip"))
+                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString("attachment")));
+    }
+
+    @Test
+    void uploadRejectsDisallowedExtension() throws Exception {
         String token = adminToken();
         long postId = createPost(token, "pa-badtype-post");
 
@@ -92,6 +139,21 @@ class PostAttachmentControllerTest {
 
         mockMvc.perform(multipart("/api/admin/posts/{id}/attachments", postId)
                         .file(png)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void uploadRejectsDisallowedExtensionEvenWithAnAllowedContentType() throws Exception {
+        // Classification is by filename extension, not the client-supplied
+        // Content-Type header — a mislabeled file shouldn't sneak through.
+        String token = adminToken();
+        long postId = createPost(token, "pa-mislabeled-post");
+
+        MockMultipartFile exe = new MockMultipartFile("file", "payload.exe", "application/pdf", new byte[]{1, 2, 3});
+
+        mockMvc.perform(multipart("/api/admin/posts/{id}/attachments", postId)
+                        .file(exe)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isBadRequest());
     }
@@ -289,5 +351,11 @@ class PostAttachmentControllerTest {
     /** Minimal valid PDF bytes (header + EOF marker) — enough for our controller, which never parses it. */
     private byte[] minimalPdfBytes() {
         return "%PDF-1.4\n%%EOF".getBytes();
+    }
+
+    /** Minimal valid ZIP bytes (empty-archive end-of-central-directory record) — enough for our
+     * controller, which never parses it, just stores/serves the bytes as-is. */
+    private byte[] minimalZipBytes() {
+        return new byte[]{0x50, 0x4B, 0x05, 0x06, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     }
 }

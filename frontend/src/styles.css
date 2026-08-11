@@ -1072,7 +1072,10 @@ img {
   color: var(--color-text);
 }
 
-.attachment-modal__docx {
+/* Shared rendered-prose layout — DOCX (via mammoth) and MD (via ReactMarkdown)
+   both land here as rendered HTML in the attachment viewer modal. */
+.attachment-modal__docx,
+.attachment-modal__prose {
   padding: 24px 32px;
   font-size: 15px;
   line-height: 1.7;
@@ -1081,7 +1084,8 @@ img {
   margin: 0 auto;
 }
 
-.attachment-modal__docx img {
+.attachment-modal__docx img,
+.attachment-modal__prose img {
   max-width: 100%;
 }
 

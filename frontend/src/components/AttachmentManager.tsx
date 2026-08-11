@@ -2,15 +2,28 @@ import { useRef, useState } from 'react';
 import { uploadPostAttachment, deletePostAttachment, UnauthorizedError } from '../api';
 import type { PostAttachment, AttachmentType } from '../types';
 
-const ALLOWED_TYPES: Record<string, AttachmentType> = {
-  'application/pdf': 'PDF',
-  'application/msword': 'DOC',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'DOCX',
-  'text/plain': 'TXT',
+// Keyed by filename extension, not MIME type — matches the backend
+// (PostAttachmentService), which classifies the same way because many
+// browsers/OSes report no reliable Content-Type for .md (often "" or a
+// generic fallback). Checking here too just means the error message shows
+// up instantly instead of after a round trip.
+const ALLOWED_EXTENSIONS: Record<string, AttachmentType> = {
+  pdf: 'PDF',
+  doc: 'DOC',
+  docx: 'DOCX',
+  txt: 'TXT',
+  md: 'MD',
+  zip: 'ZIP',
 };
 const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024; // 20 MB
 
-const ICONS: Record<AttachmentType, string> = { PDF: '📕', DOC: '📄', DOCX: '📄', TXT: '📃' };
+const ICONS: Record<AttachmentType, string> = { PDF: '📕', DOC: '📄', DOCX: '📄', TXT: '📃', MD: '📝', ZIP: '🗜️' };
+
+function extensionOf(filename: string): string {
+  const dot = filename.lastIndexOf('.');
+  if (dot < 0 || dot === filename.length - 1) return '';
+  return filename.slice(dot + 1).toLowerCase();
+}
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -39,8 +52,8 @@ export default function AttachmentManager({ postId, initialAttachments, onAuthEr
     if (!file) return;
     setUploadError(null);
 
-    if (!(file.type in ALLOWED_TYPES)) {
-      setUploadError('Only PDF, DOC, DOCX, or TXT files are accepted.');
+    if (!(extensionOf(file.name) in ALLOWED_EXTENSIONS)) {
+      setUploadError('Only PDF, DOC, DOCX, TXT, MD, or ZIP files are accepted.');
       e.target.value = '';
       return;
     }
@@ -108,7 +121,7 @@ export default function AttachmentManager({ postId, initialAttachments, onAuthEr
       <input
         ref={fileInputRef}
         type="file"
-        accept=".pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+        accept=".pdf,.doc,.docx,.txt,.md,.zip,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,application/zip"
         style={{ display: 'none' }}
         onChange={handleFileChange}
       />
@@ -129,7 +142,7 @@ export default function AttachmentManager({ postId, initialAttachments, onAuthEr
       )}
 
       <p style={{ marginTop: 6, fontSize: 12, color: 'var(--color-text-muted)' }}>
-        PDF, DOC, DOCX, or TXT — max 20 MB each
+        PDF, DOC, DOCX, TXT, MD, or ZIP — max 20 MB each
       </p>
     </div>
   );

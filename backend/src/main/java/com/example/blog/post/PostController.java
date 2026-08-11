@@ -109,9 +109,12 @@ public class PostController {
     @GetMapping("/{id}/attachments/{attachmentId}")
     public ResponseEntity<byte[]> getAttachment(@PathVariable Long id, @PathVariable Long attachmentId) {
         PostAttachment attachment = postAttachmentService.getForView(id, attachmentId);
-        // DOC (legacy binary format) has no safe in-browser renderer in this app — force a
-        // download instead of "inline" so the browser doesn't just show a garbled prompt.
-        ContentDisposition.Builder disposition = attachment.getAttachmentType() == AttachmentType.DOC
+        // DOC (legacy binary format) and ZIP (archive) have no safe in-browser renderer in
+        // this app — force a download instead of "inline" so the browser doesn't just show
+        // a garbled prompt or try to render binary bytes as text.
+        boolean noInlineRenderer = attachment.getAttachmentType() == AttachmentType.DOC
+                || attachment.getAttachmentType() == AttachmentType.ZIP;
+        ContentDisposition.Builder disposition = noInlineRenderer
                 ? ContentDisposition.attachment()
                 : ContentDisposition.inline();
         return ResponseEntity.ok()

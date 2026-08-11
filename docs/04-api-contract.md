@@ -317,7 +317,7 @@ No backend endpoint — the editor parses a pasted YouTube URL (watch/shorts/
 </div>
 ```
 
-## 10. Post Attachments (PDF/DOC/DOCX/TXT)
+## 10. Post Attachments (PDF/DOC/DOCX/TXT/MD/ZIP)
 
 Downloadable/viewable files attached to a post (distinct from inline content
 images/videos pasted into Markdown — attachments are a structural list on the
@@ -326,10 +326,22 @@ required `post_id` FK from the start, so access is gated by the parent post's
 visibility, same as the cover image — a private post's attachments are exactly
 as protected as its content.
 
-Allowed types: `application/pdf`, `application/msword` (DOC),
-`application/vnd.openxmlformats-officedocument.wordprocessingml.document`
-(DOCX), `text/plain` (TXT). Max 20 MB per file. Stored as the
-`post_attachments.data` bytea column.
+Allowed types, by filename extension — **not** the client-supplied
+`Content-Type` header: many browsers/OSes have no registered MIME type for
+`.md` and send `""` or a generic fallback, so classification and the stored
+`contentType` are both derived server-side from the extension
+(`PostAttachmentService.ALLOWED_EXTENSIONS`/`CANONICAL_CONTENT_TYPES`).
+
+| Extension | `attachmentType` | Stored `contentType` |
+|---|---|---|
+| `.pdf` | `PDF` | `application/pdf` |
+| `.doc` | `DOC` | `application/msword` |
+| `.docx` | `DOCX` | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` |
+| `.txt` | `TXT` | `text/plain` |
+| `.md` | `MD` | `text/markdown` |
+| `.zip` | `ZIP` | `application/zip` |
+
+Max 20 MB per file. Stored as the `post_attachments.data` bytea column.
 
 The post's `attachments` array (see [Get Post By Slug](#3-get-post-by-slug))
 is `[]` on list/search responses and populated only on the detail endpoint and
@@ -358,7 +370,7 @@ Response (`201`):
 }
 ```
 
-Errors: `400 BAD_REQUEST` (disallowed type, empty file, over 20 MB),
+Errors: `400 BAD_REQUEST` (disallowed extension, empty file, over 20 MB),
 `404 POST_NOT_FOUND` (unknown post id).
 
 ### List attachments (admin)
@@ -384,9 +396,10 @@ visibility (unlike `/api/images/**`/`/api/videos/**`, which are unauthenticated
 by design — see known gaps in `docs/06-project-memory.md`): a private post's
 attachment 404s for a viewer who can't read the post, same oracle-safe
 plain-404 pattern as the cover image endpoint. Response has
-`Content-Disposition: inline` (PDF/DOCX/TXT — the frontend renders these in an
-in-page viewer) or `attachment` (DOC — no safe in-browser renderer, so the
-response forces a download instead).
+`Content-Disposition: inline` (PDF/DOCX/TXT/MD — the frontend renders these in
+an in-page viewer, MD via the same Markdown renderer as post content) or
+`attachment` (DOC/ZIP — no safe in-browser renderer for a legacy binary format
+or an archive, so the response forces a download instead).
 
 Errors: `404 ATTACHMENT_NOT_FOUND` (unknown id, or post not accessible to the
 current viewer).

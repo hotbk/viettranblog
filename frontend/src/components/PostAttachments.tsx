@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { fetchAttachmentBlob } from '../api';
 import type { PostAttachment, AttachmentType } from '../types';
 
-const ICONS: Record<AttachmentType, string> = { PDF: '📕', DOC: '📄', DOCX: '📄', TXT: '📃' };
+const ICONS: Record<AttachmentType, string> = { PDF: '📕', DOC: '📄', DOCX: '📄', TXT: '📃', MD: '📝', ZIP: '🗜️' };
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -60,7 +61,7 @@ function AttachmentViewerModal({ attachment, onClose }: { attachment: PostAttach
         const blob = await fetchAttachmentBlob(attachment.url);
         if (cancelled) return;
 
-        if (attachment.attachmentType === 'TXT') {
+        if (attachment.attachmentType === 'TXT' || attachment.attachmentType === 'MD') {
           const text = await blob.text();
           if (cancelled) return;
           setTextContent(text);
@@ -74,8 +75,8 @@ function AttachmentViewerModal({ attachment, onClose }: { attachment: PostAttach
           if (cancelled) return;
           setDocxHtml(result.value);
         } else {
-          // PDF: browsers render it natively in an <iframe>. DOC: no safe in-browser
-          // renderer exists for the legacy binary format — offer download only.
+          // PDF: browsers render it natively in an <iframe>. DOC/ZIP: no safe in-browser
+          // renderer exists for a legacy binary format or an archive — offer download only.
           createdUrl = URL.createObjectURL(blob);
           setDownloadUrl(createdUrl);
         }
@@ -144,6 +145,12 @@ function AttachmentViewerModal({ attachment, onClose }: { attachment: PostAttach
             <pre className="attachment-modal__text">{textContent}</pre>
           )}
 
+          {state === 'ready' && attachment.attachmentType === 'MD' && (
+            <div className="attachment-modal__prose">
+              <ReactMarkdown>{textContent ?? ''}</ReactMarkdown>
+            </div>
+          )}
+
           {state === 'ready' && attachment.attachmentType === 'DOCX' && (
             <div className="attachment-modal__docx" dangerouslySetInnerHTML={{ __html: docxHtml ?? '' }} />
           )}
@@ -155,6 +162,17 @@ function AttachmentViewerModal({ attachment, onClose }: { attachment: PostAttach
               <p className="empty-state__desc">
                 The legacy Word format can't be safely previewed in the browser. Use the
                 Download button above to open it locally.
+              </p>
+            </div>
+          )}
+
+          {state === 'ready' && attachment.attachmentType === 'ZIP' && (
+            <div className="empty-state">
+              <div className="empty-state__icon" aria-hidden>🗜️</div>
+              <p className="empty-state__title">Preview not available for .zip files</p>
+              <p className="empty-state__desc">
+                Archives can't be previewed in the browser. Use the Download button above
+                to open it locally.
               </p>
             </div>
           )}
