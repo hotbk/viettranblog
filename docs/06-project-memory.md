@@ -2058,3 +2058,62 @@ not what "introduction content" referred to here.
 
 Checks run: `npm run typecheck`/`lint`/`build` — all clean (same 2
 pre-existing unrelated warnings).
+
+## 2026-08-11 — New brand icon mark (replaces the generic "[2]" numeral)
+
+Summary: user feedback (design review) — the existing icon (a numeral "2"
+cut as negative space from a solid rounded square, framed by bracket
+ticks) was clean but generic; it didn't evoke Database/DevOps/DBA/AI
+specifically and could be any tech blog's logo. Asked for a new icon along
+those lines (suggested terminal, database, or industry-characteristic
+imagery as directions).
+
+Explored two concepts, rendered both with a real headless-Chromium
+screenshot at 200/64/32/16px (favicon-relevant sizes) before picking —
+`playwright-core` + the cached `chromium-1234` binary at
+`~/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome` (no
+`playwright` browser install needed, matches the FE-L6 pattern from
+2026-08-10):
+1. Database cylinder (stacked-disk silhouette + thin seam lines) — read
+   fine at 200/64px but the thin seams and everything else dissolved into
+   an unrecognizable blob at 32/16px. Rejected — a favicon has to survive
+   a 16px browser tab, which is its most common real-world size.
+2. Terminal chevron ">" + two stacked data bars (shipped) — "querying data
+   from the command line" in one glyph: DevOps (terminal) + Database
+   (stacked bars) in the same mark, using only two shapes bold enough to
+   stay legible at 16px. Considered a single solid cursor block first (the
+   literal PowerShell/Windows-Terminal glyph) but split it into two bars
+   instead, both for a closer nod to "data" and to move away from
+   duplicating another product's icon.
+
+Files touched: `frontend/src/components/NavBrand.tsx` (navbar mark, fills
+with `var(--color-accent)` so it already tracks the brand token) and
+`frontend/public/favicon.svg` (standalone — literal `#3D4FE8` hex, can't
+reach CSS custom properties). Both use the same mask-cutout technique and
+mask geometry as before, only the inner path/rects changed. Same technique
+duplication between the two files that already existed pre-fix (noted, not
+resolved here — out of scope of a design-only change).
+
+Bug caught before shipping: the first `favicon.svg` draft's descriptive
+XML comment contained the literal text `var(--color-accent)` — a bare `--`
+anywhere inside an XML/SVG comment is invalid per the XML spec (comments
+may only use `--` as the opening/closing delimiter) and silently breaks
+the whole file's parse when loaded as `<img src="favicon.svg">` — Chrome
+just renders a broken-image icon with no console error or failed network
+request, which is exactly why the render-and-look step caught it and a
+typecheck/build pass would not have (a standalone `.svg` isn't type-checked
+or bundle-validated the way `NavBrand.tsx`'s JSX is). Reworded the comment
+to describe the CSS variable without using `--` literally.
+
+Checks run: `npm run typecheck`/`lint`/`build` — all clean; confirmed
+`dist/favicon.svg` carries the new mark after build. Visually verified via
+headless-Chromium screenshot: the mark in the navbar next to the
+"TECH2BLOGS" wordmark, and standalone at 16/32/48/96px on both light and
+dark backgrounds.
+
+Known gap (pre-existing, not introduced or fixed here): the icon mask
+geometry is hand-duplicated between `NavBrand.tsx` and `favicon.svg`
+(one uses a CSS var fill, the other a literal hex, so they can't trivially
+share a single source) — same category of drift risk as the pre-fix
+navbar-link duplication, just lower blast radius since it's presentational
+and only 2 copies. Not fixed; flagging for awareness.

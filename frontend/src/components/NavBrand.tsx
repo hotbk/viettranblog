@@ -10,36 +10,24 @@ export default function NavBrand() {
         xmlns="http://www.w3.org/2000/svg"
         aria-hidden="true"
       >
-        {/* Icon mark: the numeral "2" cut as negative space from a solid rounded square,
-            framed by a pair of bracket ticks — "[2]" — the system's data/code notation
-            signal. Same "2" path as the wordmark, reused as the brand's icon/favicon asset. */}
+        {/* Icon mark: a terminal chevron ">" + two stacked data bars, cut as negative
+            space from a solid rounded square — "querying data from the command line"
+            in one glyph, so the mark reads as Database/DevOps/DBA/AI-specific rather
+            than a generic tech-blog numeral. Bars (not thin seam lines) so the shape
+            stays legible down to a 16px browser-tab favicon — see the same mask
+            geometry duplicated in public/favicon.svg (standalone, no CSS var access). */}
         <mask id="t2b-icon-mask">
           <rect width="100" height="100" rx="24" fill="#fff" />
           <path
-            d="M9.33,18.48 A22,22 0 1,1 41,45.05 L8,96 L52,96"
+            d="M20,26 L47,50 L20,74"
             fill="none"
             stroke="#000"
-            strokeWidth="24"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            transform="translate(33.3,14) scale(0.76) translate(-8,-4)"
-          />
-          <path
-            d="M16,32 V68 M16,32 H24 M16,68 H24"
-            fill="none"
-            stroke="#000"
-            strokeWidth="9"
+            strokeWidth="14"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
-          <path
-            d="M84,32 V68 M84,32 H76 M84,68 H76"
-            fill="none"
-            stroke="#000"
-            strokeWidth="9"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+          <rect x="54" y="58" width="26" height="11" rx="3" fill="#000" />
+          <rect x="54" y="73" width="26" height="11" rx="3" fill="#000" />
         </mask>
         <rect width="100" height="100" rx="24" fill="var(--color-accent)" mask="url(#t2b-icon-mask)" />
       </svg>
