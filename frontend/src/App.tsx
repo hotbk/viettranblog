@@ -9,8 +9,8 @@ import { categoryColorClass } from './categoryColor';
 import { getLanguagePreference, languageQueryParam, setLanguagePreference, type LanguagePreference } from './contentLanguage';
 
 const HOME_DESCRIPTION =
-  'Practical PostgreSQL, Oracle, and Kubernetes engineering notes: performance tuning, ' +
-  'production incidents, and DBA playbooks from real systems.';
+  'Practical PostgreSQL, Oracle, Kubernetes, and AI engineering notes: performance tuning, ' +
+  'production incidents, DBA playbooks, and applied AI workflows from real systems.';
 
 function formatDate(value: string | null): string {
   if (!value) return 'Unpublished';
@@ -80,7 +80,7 @@ export default function App() {
   }, []);
 
   useSeo({
-    title: 'Database, DevOps & DBA Engineering Blog',
+    title: 'Database, DevOps, DBA & AI Engineering Blog',
     description: HOME_DESCRIPTION,
     path: '/',
     jsonLd: {
@@ -100,10 +100,10 @@ export default function App() {
       {/* ── Hero ───────────────────────────────── */}
       <section className="hero">
         <div className="hero__inner">
-          <p className="hero__eyebrow">✦ Database · DevOps · DBA</p>
+          <p className="hero__eyebrow">✦ Database · DevOps · DBA · AI</p>
           <h1 className="hero__title">
             TECH2BLOGS
-            <span className="hero__title-sub"> — Database &amp; DevOps Engineering Notes</span>
+            <span className="hero__title-sub"> — Database, DevOps &amp; AI Engineering Notes</span>
           </h1>
           <p className="hero__tagline">{HOME_DESCRIPTION}</p>
         </div>

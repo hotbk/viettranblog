@@ -2025,3 +2025,36 @@ Known gaps / follow-ups:
 - Admin `.badge--*` pills (draft/admin/editor/reader/etc.) are hardcoded
   light-pastel and don't adapt to dark mode — cosmetic-only, admin area,
   not reported by the user.
+
+## 2026-08-11 — Site intro/meta copy: added AI as a main topic
+
+Summary: user said the blog's main topics now also relate to AI and asked
+for this in the "introduction" content. Updated every reader-facing
+site-identity string that lists the blog's topics (there's no single
+source of truth for this copy — it's duplicated across a static HTML
+fallback and the home page's SEO hook):
+- `frontend/index.html` — `<title>`, `<meta name="description">`,
+  `og:title`/`og:description`, `twitter:title`/`twitter:description`.
+- `frontend/src/App.tsx` — `HOME_DESCRIPTION` (hero tagline + reused as the
+  `useSeo` description and JSON-LD `Blog.description`), the home page's
+  `useSeo({ title: ... })`, the hero `eyebrow` line, and the hero `h1`
+  subtitle.
+
+Old: "Practical PostgreSQL, Oracle, and Kubernetes engineering notes:
+performance tuning, production incidents, and DBA playbooks from real
+systems." / title "Database, DevOps & DBA Engineering Blog".
+New: "...PostgreSQL, Oracle, Kubernetes, and AI engineering notes: ...DBA
+playbooks, and applied AI workflows from real systems." / title "Database,
+DevOps, DBA & AI Engineering Blog". Consistent with the existing "AI
+Workflow" post category already in use.
+
+Decision — did not touch: the About page's actual body copy is CMS content
+(`fetchAbout`/`updateAbout`, edited via `AdminAbout.tsx`, stored in the
+database) — no static text in the repo to edit; the admin needs to add an
+AI paragraph there themselves. Also left `docs/01-prd.md`'s topic list
+(generic: "technology, data engineering, management, personal notes,
+learning journals") untouched — internal planning doc, not reader-facing,
+not what "introduction content" referred to here.
+
+Checks run: `npm run typecheck`/`lint`/`build` — all clean (same 2
+pre-existing unrelated warnings).
