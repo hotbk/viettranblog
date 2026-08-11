@@ -2226,3 +2226,111 @@ background doesn't" bug, grep for the *symptom* (`background: #` /
 `var(--color-error`/etc.), not the *specific token name* that happened to
 be involved in the first report — the same defect recurs under different
 token names (`--color-navy` this morning, `--color-text` this afternoon).
+
+## 2026-08-11 — New module: Tools (self-contained HTML/CSS/JS artifacts)
+
+Summary: user gave a full spec (with a reference HTML artifact — a
+"SQL Performance Tuning" interactive checklist page) for a new module to
+store and serve admin-pasted, fully self-contained HTML/CSS/JS pages at
+their own public URL. Explicitly independent of Post (confirmed via prior
+live testing that the Markdown renderer strips `<script>` tags — real
+XSS defense, not an oversight to route around) and Book (PDF/TXT only).
+`TASK-BE-018`/`TASK-FE-010` in `TASKS.md`; full contract in
+`docs/04-api-contract.md` §14; architecture in `docs/03-architecture.md`
+§4.6.
+
+**Two deviations from the literal spec, both load-bearing, both because
+the literal path wasn't reachable through this app's existing
+infrastructure:**
+1. `GET /tools/{slug}/raw` (spec) → `GET /api/tools/{slug}/raw` (shipped).
+   Neither the Vite dev proxy nor the nginx production proxy (`docs/03`
+   §9) forward anything outside `/api/**` — the literal path would have
+   silently 404'd everywhere except `mvn spring-boot:run` on localhost.
+2. `POST/PUT/DELETE /admin/api/tools` (spec) → `/api/admin/tools`
+   (shipped) — matches every other admin endpoint's `/api/admin/**`
+   convention and the existing `SecurityConfig` matcher.
+
+**Design choices beyond the letter of the spec:**
+- `html_source` split into its own table (`tool_sources`, one row per
+  tool, unique FK) rather than a column on `tools` — the architecture doc
+  explicitly calls this out as the pattern to copy for any future
+  large-blob feature (`book_files`/`Book` split, §4.3), and the spec's own
+  500KB–1MB cap is exactly the size that would make a bulk admin listing
+  expensive if inlined.
+- Added `GET /api/tools/{slug}` (metadata-only detail) — the spec's
+  frontend requirement ("breadcrumb, title, mô tả") needs this data from
+  somewhere; filtering the already-fetched list client-side was rejected
+  as fragile (a direct-linked/bookmarked tool wouldn't be in that list).
+- Added a client-only "Preview" button in the admin form (blob URL, same
+  sandbox, nothing saved) — cheap to add, and directly serves the spec's
+  own acceptance criterion of confirming a paste "chạy đầy đủ" before
+  publishing, without a save/publish/check/edit round trip.
+- `rawUrl` added to `ToolResponse`/`AdminToolResponse` (backend hands back
+  a ready `/api/tools/{slug}/raw` URL) rather than the frontend
+  hand-constructing it — matches the existing `PostAttachmentResponse.url`
+  convention; also means the frontend never needs to know the raw
+  endpoint's path shape.
+
+**Real bug caught only by running it, not by reasoning about it:** Spring
+Security's `HeaderWriterFilter` writes `X-Frame-Options: DENY` on *every*
+response by default. `PublicToolController#raw`'s own `X-Frame-Options:
+SAMEORIGIN` header was silently overridden by that default — DENY blocks
+all framing, including `ToolDetail.tsx`'s own same-origin iframe, which
+would have made the entire feature non-functional (the one thing it needs
+to do — display the tool — simply wouldn't render, no error, just a
+blocked frame). Caught by actually running `ToolControllerTest`, which
+asserts the header value; a docs-only or code-review-only pass would very
+plausibly have missed this, since the controller code alone looks
+correct in isolation. Fixed by setting the site-wide `frameOptions`
+default to `sameOrigin()` in `SecurityConfig` instead of leaving Spring's
+default in place — also removes a latent same-class risk for any future
+same-origin-iframe feature in this app.
+
+**Verified the core mechanism with a real browser, not just backend
+tests:** built a standalone headless-Chromium harness (`playwright-core` +
+the cached `chromium-1234` binary, same pattern as the 2026-08-10 FE-L6
+pass and the 2026-08-11 icon-mark work) reproducing the exact
+`sandbox="allow-scripts"` (no `allow-same-origin`) iframe configuration
+`ToolDetail.tsx` uses, loaded a script derived from the user's reference
+artifact, and confirmed: inline `<script>` executes, `onclick` handlers
+fire, dynamic `innerHTML` updates render, and — critically — the sandboxed
+iframe's `window.parent.postMessage(...)` call reaches the parent page's
+listener (proves the `tool-resize` auto-height opt-in actually works end
+to end, not just "should work per the sandbox spec").
+
+Files touched: `backend/src/main/resources/db/migration/V5__add_tools.sql`;
+`backend/src/main/java/com/example/blog/tool/*` (new package, 12 files);
+`backend/src/main/java/com/example/blog/config/SecurityConfig.java`;
+`backend/src/test/java/com/example/blog/tool/ToolControllerTest.java`
+(new); `frontend/src/types.ts`, `api.ts`, `main.tsx`,
+`components/SiteNav.tsx`, `styles.css`; `frontend/src/pages/ToolsList.tsx`,
+`ToolDetail.tsx`, `AdminTools.tsx`, `AdminToolForm.tsx` (new); 8 existing
+`Admin*.tsx` pages (topbar "Tools" link); `docs/04-api-contract.md`,
+`docs/03-architecture.md`, `TASKS.md`.
+
+Checks run: `mvn test` — 153/153 (145 pre-existing + 8 new). `npm run
+lint && npm run typecheck && npm run build` — all clean. Manual
+headless-Chromium verification of the sandboxed-iframe mechanism (above).
+
+Decisions — did not do:
+- No access-group/per-user sharing for private tools (`ToolVisibility` is
+  a plain enum, PRIVATE = staff-only) — not requested, and every other
+  gated content type already pays for that machinery whether it needs
+  per-user grants or not; adding it speculatively would be the kind of
+  over-engineering `CLAUDE.md` calls out.
+- No magic-byte/content-sniffing validation on the cover-image upload —
+  same posture as every other upload in this app already, not a
+  regression introduced here.
+- Did not refactor the admin topbar's per-page link duplication into a
+  shared component, despite it being the same drift-prone pattern the
+  public navbar had before the 2026-08-11 fix (confirmed already
+  inconsistent across pages, independent of this task). Added "Tools" to
+  the existing (imperfect) per-page lists rather than expanding this
+  task's scope into an unrelated refactor.
+
+Known gaps / follow-ups:
+- Admin topbar link duplication (above) — candidate for the same
+  shared-component treatment `SiteNav.tsx` got.
+- No frontend test suite exists yet (project-wide, pre-existing) — the
+  sandboxed-iframe behavior has only the manual headless-browser
+  verification from this session, not a checked-in regression test.

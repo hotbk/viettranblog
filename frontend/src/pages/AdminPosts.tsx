@@ -226,6 +226,7 @@ export default function AdminPosts() {
             <Link to="/admin/access-requests" className="admin-topbar__view-site">Access Requests</Link>
             <Link to="/admin/about" className="admin-topbar__view-site">About</Link>
             <Link to="/admin/books" className="admin-topbar__view-site">Books</Link>
+            <Link to="/admin/tools" className="admin-topbar__view-site">Tools</Link>
             <Link to="/" className="admin-topbar__view-site">View site &rarr;</Link>
             <button className="btn--topbar-logout" onClick={handleLogout}>
               Sign out

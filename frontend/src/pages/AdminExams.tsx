@@ -81,6 +81,7 @@ export default function AdminExams() {
             <Link to="/admin/attempts" className="admin-topbar__view-site">Attempts</Link>
             <Link to="/admin/about" className="admin-topbar__view-site">About</Link>
             <Link to="/admin/books" className="admin-topbar__view-site">Books</Link>
+            <Link to="/admin/tools" className="admin-topbar__view-site">Tools</Link>
             <Link to="/" className="admin-topbar__view-site">View site &rarr;</Link>
             <button className="btn--topbar-logout" onClick={handleLogout}>Sign out</button>
           </div>

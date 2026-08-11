@@ -633,3 +633,130 @@ DRAFT siblings) on every row, not just on a detail call.
 Translations panel) is done as of 2026-08-10 — `frontend/src/api.ts` sends/
 reads all the fields above. `TASK-BE-017`/`TASK-FE-009` (machine-assisted
 translation) remain separate, not-yet-started tickets — see `TASKS.md`.
+
+## 14. Tools — self-contained HTML/CSS/JS artifacts (`TASK-BE-018`/`TASK-FE-010`)
+
+A `Tool` stores one admin-pasted, fully self-contained HTML page (CSS/JS
+inline or via CDN links — the pasted markup is assumed complete, like a
+standalone `.html` file) and serves it back byte-for-byte at its own public
+URL. Deliberately independent of Posts (Markdown rendering strips `<script>`
+tags — verified, not assumed) and Books (PDF/TXT only). No access-group
+system like Post/Book/Exam (`ToolVisibility` is a plain PUBLIC/PRIVATE enum,
+PRIVATE = staff-only, checked directly, no group/direct-grant model) — this
+module wasn't asked to grow per-user tool sharing.
+
+`html_source` lives in a separate `tool_sources` table (one row per tool,
+unique FK), never on `tools` itself, so a bulk listing query can't
+accidentally load a ~1 MB blob per row — same split as `book_files`/`Book`
+(§4.3 of the architecture doc). It is also never sent in the list/detail
+JSON (`ToolResponse`) — only `GET /api/admin/tools/{id}` (`AdminToolResponse`,
+edit-form load) and the raw endpoint below ever carry it.
+
+### Data model
+
+| Field | Notes |
+|---|---|
+| `id`, `title`, `slug` (unique) | same conventions as Post |
+| `category`, `tags` | same comma-separated-storage/array-API shape as Post |
+| `excerpt` | shown on the tools listing card |
+| `coverImageData`/`ContentType`/`OriginalFilename`/`Size` | inline bytea, 2 MB cap, same as Post's cover image |
+| `htmlSource` | **in `tool_sources`, not `tools`** — TEXT, 1 MB app-level cap |
+| `status` | DRAFT / PUBLISHED |
+| `visibility` | PUBLIC / PRIVATE — simple, no access-group system (see above) |
+| `viewCount` | same atomic-increment convention as Post |
+| `createdAt`/`updatedAt`/`publishedAt`/`createdBy` | audit fields |
+
+### List tools (public)
+
+### GET `/api/tools`
+
+`permitAll`. Query params `q` (title/excerpt substring, case-insensitive),
+`category`. Returns only `status=PUBLISHED and visibility=PUBLIC` tools —
+unlike Post's PUBLIC_METADATA teaser mechanism, a private tool is simply
+absent from this list (no locked-teaser UI for tools).
+
+### Get tool by slug (public)
+
+### GET `/api/tools/{slug}`
+
+`permitAll`. 404 `TOOL_NOT_FOUND` unless PUBLISHED+PUBLIC. Metadata only
+(`ToolResponse` — no `htmlSource`); the detail page's iframe loads the
+source separately via `rawUrl`.
+
+### Raw HTML (the endpoint this module exists for)
+
+### GET `/api/tools/{slug}/raw`
+
+`permitAll`. Re-checks PUBLISHED+PUBLIC itself (doesn't trust the caller
+already having called the endpoint above) — 404 `TOOL_NOT_FOUND`, not 403,
+on a draft/private tool, same oracle-avoidance convention as
+`PostAccessService` (§4.2 of the architecture doc). Response is **not**
+JSON: `Content-Type: text/html; charset=utf-8`, body is the stored
+`html_source` verbatim — no escaping, no site layout/template, no
+sanitization.
+
+Also sets, scoped to this endpoint only (not a site-wide CSP):
+`X-Frame-Options: SAMEORIGIN` and `Content-Security-Policy:
+frame-ancestors 'self'` — stops another site from iframing a tool page
+(clickjacking its buttons). No other CSP is applied here; the tool's own
+inline scripts must run completely unrestricted, which is the entire
+point of the feature.
+
+**Load-bearing fix**: Spring Security writes its own `X-Frame-Options:
+DENY` on every response by default (`HeaderWriterFilter`), which
+overrides a controller's own header and would have blocked ToolDetail.tsx
+from framing this endpoint even same-origin — silently breaking the whole
+feature. `SecurityConfig` now sets the site-wide default to `sameOrigin()`
+instead of leaving Spring's DENY default in place.
+
+### Cover image (public)
+
+### GET `/api/tools/{id}/cover-image`
+
+`permitAll`. Same shape as `GET /api/posts/{id}/cover-image`. 404 if none set.
+
+### Record a view (public)
+
+### POST `/api/tools/{slug}/view`
+
+`permitAll`. Fire-and-forget, same convention as `POST /api/posts/{slug}/view`.
+
+### Admin CRUD
+
+### GET `/api/admin/tools` · GET `/api/admin/tools/{id}` · POST `/api/admin/tools` · PUT `/api/admin/tools/{id}` · DELETE `/api/admin/tools/{id}`
+
+All under `/api/admin/**` → **ADMIN only**, no EDITOR access (unlike Post's
+write endpoints) — same convention as `/api/admin/images`/`/videos`. Create/
+update are `multipart/form-data` (cover image upload alongside text fields,
+same pattern as Post/Book). `htmlSource` blank/omitted on update leaves the
+existing source untouched — lets an admin edit metadata without re-pasting
+the HTML. Create requires a non-blank `htmlSource`, 400 otherwise.
+
+Errors: `400 BAD_REQUEST` (missing title/slug/htmlSource on create, over
+1 MB, invalid cover image type/size), `404 TOOL_NOT_FOUND`.
+
+### Frontend rendering (`/tools/:slug`)
+
+`ToolDetail.tsx` embeds `<iframe src={tool.rawUrl} sandbox="allow-scripts">`
+— **no `allow-same-origin`**. This is the core security property of the
+whole module: the tool's JS runs, but the iframe is treated as a unique
+opaque origin, so it cannot read this app's cookies/localStorage/DOM, and
+(the flip side) this app cannot read the iframe's DOM either — which is why
+height is a fixed default rather than measured. A tool's own script can
+opt into auto-sizing by posting `{ type: 'tool-resize', height }` to
+`window.parent`; `ToolDetail.tsx` listens for it and clamps the value to
+[200, 4000]px. Verified end-to-end with a real headless-browser render (not
+just reasoned about): inline `<script>` execution, click handlers, DOM
+updates, and the `postMessage` round-trip to the parent all work under this
+exact sandbox configuration.
+
+### Known gaps
+
+- No magic-byte/content-sniffing on upload (accepted: admin-only write
+  path, no weaker than any other upload in this app).
+- `/tools/{slug}/raw` is reachable in both dev (`/api` Vite proxy) and prod
+  (`/api/` nginx proxy) because it lives under `/api/`, matching every
+  other backend route — the original request's literal path
+  (`/tools/{slug}/raw`, no `/api` prefix) would not have been reachable
+  through either proxy without a new nginx location block; deviated from
+  that literal path for this reason.

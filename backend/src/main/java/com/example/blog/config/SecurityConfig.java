@@ -34,6 +34,14 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // Spring Security's own default (X-Frame-Options: DENY, written by
+                // HeaderWriterFilter on every response) otherwise clobbers
+                // PublicToolController#raw's explicit SAMEORIGIN header — DENY blocks
+                // ALL framing, including our own same-origin ToolDetail.tsx iframe, which
+                // would silently break the entire Tools feature. SAMEORIGIN is also just
+                // the safer site-wide default (no legitimate cross-origin framing need
+                // anywhere else in this app either).
+                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
@@ -51,6 +59,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/exams").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/images/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/videos/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/tools/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/tools/*/view").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/books").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/books/*/cover-image").permitAll()
                         // Progress/me-reading matchers MUST come before the GET /api/books/** wildcard below —

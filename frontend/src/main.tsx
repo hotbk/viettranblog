@@ -20,6 +20,8 @@ import AdminAttemptDetail from './pages/AdminAttemptDetail';
 import AdminAbout from './pages/AdminAbout';
 import AdminBooks from './pages/AdminBooks';
 import AdminBookForm from './pages/AdminBookForm';
+import AdminTools from './pages/AdminTools';
+import AdminToolForm from './pages/AdminToolForm';
 import PostDetail from './pages/PostDetail';
 import SeriesList from './pages/SeriesList';
 import SeriesDetail from './pages/SeriesDetail';
@@ -28,6 +30,8 @@ import LibraryPage from './pages/LibraryPage';
 import BookDetailPage from './pages/BookDetailPage';
 import BookReaderPage from './pages/BookReaderPage';
 import MyHighlightsPage from './pages/MyHighlightsPage';
+import ToolsList from './pages/ToolsList';
+import ToolDetail from './pages/ToolDetail';
 import MemberLogin from './pages/MemberLogin';
 import MemberRegister from './pages/MemberRegister';
 import MemberExams from './pages/MemberExams';
@@ -52,6 +56,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <Route path="/library/highlights" element={<MyHighlightsPage />} />
         <Route path="/library/:slug" element={<BookDetailPage />} />
         <Route path="/library/:slug/read" element={<BookReaderPage />} />
+        <Route path="/tools" element={<ToolsList />} />
+        <Route path="/tools/:slug" element={<ToolDetail />} />
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/member/login" element={<MemberLogin />} />
         <Route path="/member/register" element={<MemberRegister />} />
@@ -74,6 +80,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <Route path="/admin/books" element={<AdminBooks />} />
           <Route path="/admin/books/new" element={<AdminBookForm />} />
           <Route path="/admin/books/:id/edit" element={<AdminBookForm />} />
+          <Route path="/admin/tools" element={<AdminTools />} />
+          <Route path="/admin/tools/new" element={<AdminToolForm />} />
+          <Route path="/admin/tools/:id/edit" element={<AdminToolForm />} />
         </Route>
         <Route element={<RequireMember />}>
           <Route path="/member/exams" element={<MemberExams />} />

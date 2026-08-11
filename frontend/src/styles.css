@@ -1332,6 +1332,39 @@ img {
 }
 
 /* ============================================================
+   TOOLS MODULE — public detail page + admin form
+   ============================================================ */
+.tool-detail__excerpt {
+  font-size: 16px;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+  margin: 12px 0 0;
+}
+
+.tool-detail__frame {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  /* height is set inline per-instance (default, or the tool's own
+     postMessage-reported size) — see ToolDetail.tsx */
+}
+
+.tool-form__html-source {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.tool-form__preview-frame {
+  width: 100%;
+  height: 480px;
+  margin-top: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+/* ============================================================
    STATES — Loading / Empty / Error
    ============================================================ */
 

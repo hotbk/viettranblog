@@ -558,3 +558,113 @@ Acceptance criteria:
 - Frontend CI command documented
 - Backend CI command documented
 - No secrets committed
+
+---
+
+### TASK-BE-018 — Tools module: self-contained HTML/CSS/JS artifacts, backend (DONE)
+
+Owner agent: `backend-agent`
+
+Full design: `docs/04-api-contract.md` §14, `docs/03-architecture.md` §4.6.
+New module, independent of Post/Book: Post's Markdown renderer strips
+`<script>` tags (verified via live test — the original reason this module
+exists), Book only accepts PDF/TXT.
+
+Files affected (all new unless noted):
+- `backend/src/main/resources/db/migration/V5__add_tools.sql` — `tools` +
+  `tool_sources` (separate table for `html_source`, mirrors `book_files`)
+- `backend/src/main/java/com/example/blog/tool/` — `Tool`, `ToolSource`,
+  `ToolStatus`, `ToolVisibility`, `Tags`, `ToolRepository`,
+  `ToolSourceRepository`, `ToolRequest`, `ToolResponse`,
+  `AdminToolResponse`, `ToolService`, `PublicToolController`,
+  `AdminToolController`
+- `backend/src/main/java/com/example/blog/config/SecurityConfig.java` —
+  `/api/tools/**` GET + `/api/tools/*/view` POST permitAll matchers;
+  site-wide `frameOptions(sameOrigin())` (see gap below)
+- `backend/src/test/java/com/example/blog/tool/ToolControllerTest.java`
+
+Acceptance criteria:
+- Admin (ADMIN only, no EDITOR) can create/edit/delete a tool via
+  `/api/admin/tools`, pasting a complete HTML document into one field.
+- `GET /api/tools` lists only PUBLISHED+PUBLIC tools; a draft/private tool
+  is absent, not a locked teaser (no access-group system for tools).
+- `GET /api/tools/{slug}/raw` serves the stored HTML byte-for-byte as
+  `text/html`, with per-route `X-Frame-Options`/CSP headers; 404s (not
+  403s) for a draft/private/unknown slug.
+- `mvn test` — full suite green (145 pre-existing + 8 new = 153).
+
+Test command:
+
+```bash
+cd backend && mvn test
+```
+
+Known gaps:
+- Deviated from the task-definition's literal `GET /tools/{slug}/raw` (no
+  `/api` prefix) to `GET /api/tools/{slug}/raw` — the literal path isn't
+  reachable through either the Vite dev proxy or the nginx production
+  proxy (both only forward `/api/**`), which would have silently 404'd
+  the whole feature outside local `mvn spring-boot:run`. Same reasoning
+  for `/api/admin/tools` vs. the literal `/admin/api/tools`.
+- Spring Security's default `X-Frame-Options: DENY` (written on every
+  response) overrode the raw endpoint's own SAMEORIGIN header before this
+  was caught by actually running the test — fixed by setting the
+  site-wide default to `sameOrigin()` instead. Worth remembering as a
+  general trap: a controller-level security header can be silently
+  clobbered by a framework default unless that default is checked.
+- No magic-byte/content-sniffing on cover-image upload — same as every
+  other upload in this app, not a regression.
+
+---
+
+### TASK-FE-010 — Tools module: self-contained HTML/CSS/JS artifacts, frontend (DONE)
+
+Owner agent: `frontend-agent`
+
+Depends on `TASK-BE-018`. Full design: `docs/04-api-contract.md` §14.
+
+Files affected:
+- `frontend/src/types.ts`, `frontend/src/api.ts` — `Tool`/`AdminTool`
+  types, `fetchTools`/`fetchToolBySlug`/`recordToolView`/`fetchAdminTools`/
+  `fetchAdminTool`/`createTool`/`updateTool`/`deleteTool`
+- `frontend/src/pages/ToolsList.tsx`, `ToolDetail.tsx`, `AdminTools.tsx`,
+  `AdminToolForm.tsx` (all new)
+- `frontend/src/main.tsx` — `/tools`, `/tools/:slug`, `/admin/tools`(+`/new`,
+  `/:id/edit`) routes
+- `frontend/src/components/SiteNav.tsx` — added `'tools'` to the shared
+  navbar (the single-source-of-truth component from the 2026-08-11 navbar
+  fix — adding one page here, unlike the old per-page-hand-copy pattern,
+  is exactly the point of that refactor)
+- 8 existing `Admin*.tsx` pages — added a "Tools" link to their topbar
+  (pre-existing duplication, not newly introduced or newly fixed — see
+  known gap)
+- `frontend/src/styles.css` — `.tool-detail__excerpt`, `.tool-detail__frame`,
+  `.tool-form__html-source`, `.tool-form__preview-frame`
+
+Acceptance criteria:
+- `/tools` lists tools with search/category filter, same grid as Library.
+- `/tools/:slug` shows breadcrumb/title/excerpt, then
+  `<iframe sandbox="allow-scripts">` (no `allow-same-origin`) loading
+  `tool.rawUrl` — verified with a real headless-browser render that inline
+  `<script>` execution, click handlers, and `postMessage`-based auto-resize
+  all work under this sandbox.
+- Admin form has a client-only "Preview" (blob URL, same sandbox, nothing
+  saved) so a paste can be sanity-checked before publishing.
+- `npm run lint && npm run typecheck && npm run build` — all clean.
+
+Test command:
+
+```bash
+cd frontend && npm run lint && npm run typecheck && npm run build
+```
+
+Known gaps:
+- The admin topbar link list is hand-copied per page (same
+  drift-prone pattern the public navbar had before the 2026-08-11 fix) —
+  confirmed already inconsistent across pages before this task touched
+  it. Added "Tools" to the 8 pages that already list sibling sections;
+  did not refactor this into a shared component (out of scope for this
+  task, flagged for a future pass).
+- No frontend test suite exists yet (project-wide gap, not introduced
+  here) — the sandboxed-iframe interactivity was verified manually with a
+  headless-browser script during development, not as a checked-in test.

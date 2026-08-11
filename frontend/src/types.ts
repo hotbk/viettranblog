@@ -424,3 +424,35 @@ export interface RelatedPost {
   coverImageUrl: string | null;
   publishedAt: string | null;
 }
+
+export type ToolStatus = 'DRAFT' | 'PUBLISHED';
+export type ToolVisibility = 'PUBLIC' | 'PRIVATE';
+
+/**
+ * A self-contained HTML/CSS/JS artifact's metadata — never carries the
+ * source itself (see AdminTool below). The public detail page loads the
+ * source separately via the raw iframe src, not JSON.
+ */
+export interface Tool {
+  id: number;
+  title: string;
+  slug: string;
+  category: string | null;
+  tags: string[];
+  excerpt: string | null;
+  hasCoverImage: boolean;
+  coverImageUrl: string | null;
+  // Ready-to-use iframe src (GET /api/tools/{slug}/raw) — never hand-construct this.
+  rawUrl: string;
+  status: ToolStatus;
+  visibility: ToolVisibility;
+  viewCount: number;
+  createdAt: string;
+  updatedAt: string;
+  publishedAt: string | null;
+}
+
+/** Admin edit-form shape — the one place htmlSource is ever sent as JSON. */
+export interface AdminTool extends Tool {
+  htmlSource: string;
+}

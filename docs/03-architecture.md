@@ -49,12 +49,14 @@ Public:
 | `/library` | `LibraryPage` — book grid + continue-reading shelf |
 | `/library/:slug` | `BookDetailPage` |
 | `/library/:slug/read` | `BookReaderPage` — full-page PDF/TXT reader |
+| `/tools` | `ToolsList` — self-contained HTML/CSS/JS artifact grid (§4.6) |
+| `/tools/:slug` | `ToolDetail` — sandboxed iframe loading the artifact's raw HTML |
 | `/admin/login`, `/member/login`, `/member/register` | login/registration forms |
 
 Admin (inside `RequireAuth`): `/admin/posts`, `/admin/users`, `/admin/users/:id`,
 `/admin/access-groups`, `/admin/access-requests`, `/admin/audit-logs`, `/admin/series`(+`/new`,
 `/:id/edit`), `/admin/exams`(+`/new`, `/:id/edit`), `/admin/attempts`, `/admin/attempts/:id`,
-`/admin/about`, `/admin/books`(+`/new`, `/:id/edit`).
+`/admin/about`, `/admin/books`(+`/new`, `/:id/edit`), `/admin/tools`(+`/new`, `/:id/edit`).
 
 Member (inside `RequireMember`): `/member/exams`, `/member/exams/:id`,
 `/member/attempts/:attemptId`, `/member/history`.
@@ -130,6 +132,8 @@ com.example.blog
 │                          PostService, PostAttachmentService, Tags helper, DataSeeder (@Profile("dev"))
 ├── seo                    No entity. SitemapController (GET /api/sitemap.xml, generated from PUBLISHED + PUBLIC content)
 ├── series                 Series, SeriesPost (ordered join) — SeriesController, AdminSeriesController
+├── tool                   Tool, ToolSource (separate table, mirrors BookFile) — PublicToolController
+│                          (/api/tools/**), AdminToolController (/api/admin/tools), ToolService (§4.6)
 ├── user                   User (UserRole, UserStatus) — UserController (/api/admin/users), UserService
 └── video                  ContentVideo (bytea) — ContentVideoController (POST /api/admin/videos, GET /api/videos/{id},
                            HTTP Range aware), VideoTranscoder (ffmpeg/ffprobe, §6)
@@ -255,6 +259,8 @@ upload directory.
 | Transcoded video | `content_videos.data` | 200 MB raw upload / 10 min source |
 | Book cover image | `books.cover_image_data` (inline) | 2 MB |
 | Book file (PDF/TXT) | `book_files.data` (**separate table**) | 50 MB |
+| Tool cover image | `tools.cover_image_data` (inline) | 2 MB |
+| Tool HTML source | `tool_sources.html_source` (**separate table**, TEXT not bytea) | 1 MB |
 
 Spring's own limits are `max-file-size: 200MB` / `max-request-size: 205MB`; the per-feature caps
 above are enforced in code, not config.
@@ -327,6 +333,53 @@ columns, not a `translation_groups` table, and deliberately **not a foreign key*
   and **are** propagated (§4.2). This asymmetry — not an oversight — is the whole model.
 - Slugs stay globally unique across languages (`/posts/toi-uu-postgres`, `/posts/optimizing-postgres`)
   — no `/en/` path prefix, no composite-unique slug, no routing change.
+
+### 4.6 Tools — sandboxed HTML/CSS/JS artifacts
+
+Full contract: `docs/04-api-contract.md` §14. A `Tool` stores one
+admin-pasted, fully self-contained HTML page (own inline/CDN CSS and JS) and
+serves it back byte-for-byte at `GET /api/tools/{slug}/raw` — `Content-Type:
+text/html`, no escaping, no site layout. Built as its own module rather than
+reusing Post or Book: Post's Markdown renderer strips `<script>` tags
+(verified, not assumed — that's why this exists), and Book only accepts
+PDF/TXT files.
+
+Two design choices carry the whole feature:
+
+- **`html_source` lives in a separate table (`tool_sources`), not a column
+  on `tools`** — identical split to `Book`/`BookFile` (§4.3), for the same
+  reason: a bulk listing query must never risk loading a ~1 MB blob per row.
+  The list/detail JSON (`ToolResponse`) never carries it at all; only the
+  admin edit-form load (`AdminToolResponse`) and the raw endpoint do.
+- **The public iframe is sandboxed `allow-scripts` without
+  `allow-same-origin`.** The tool's JS runs, but the iframe is a unique
+  opaque origin — it cannot read this app's cookies/localStorage/DOM, and
+  (the same restriction, the other direction) this app cannot read the
+  iframe's DOM either. That's why the iframe height is a fixed default
+  rather than measured; a tool can opt into auto-sizing by `postMessage`-ing
+  `{ type: 'tool-resize', height }` to `window.parent`. Verified end-to-end
+  with a real headless-browser render, not just reasoned about: inline
+  `<script>` execution, click handlers, DOM updates, and the `postMessage`
+  round-trip all work under this exact sandbox configuration.
+
+`ToolVisibility` is deliberately simpler than `PostVisibility`/
+`BookVisibility`: a plain PUBLIC/PRIVATE enum, no access-group system (§4.2)
+— PRIVATE just means "staff only" (ADMIN, the only role with
+`/api/admin/**` access), checked directly in `ToolService`, not resolved
+through group/direct-grant membership. Not an oversight: no per-user tool
+sharing was asked for, and every gated content type in this app otherwise
+pays for the access-group machinery whether it needs per-user grants or not.
+
+One cross-cutting fix landed with this module: Spring Security's own
+`HeaderWriterFilter` writes `X-Frame-Options: DENY` on every response by
+default, which silently overrides a controller's own header — it would have
+blocked `ToolDetail.tsx` from framing `/raw` even same-origin, breaking the
+feature entirely. `SecurityConfig` now sets the site-wide frame-options
+default to `sameOrigin()` instead of leaving Spring's DENY default in place;
+`/raw` additionally sets `Content-Security-Policy: frame-ancestors 'self'`
+for defense in depth, scoped to that one route (not the site-wide policy —
+a tool's inline scripts must run unrestricted, the whole point of the
+feature).
 
 ## 5. Schema Management
 

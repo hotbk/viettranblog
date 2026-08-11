@@ -7,6 +7,7 @@ import type {
   AccessRequest, AuditLogEntry, MeResponse, AccessDenialCode, RelatedPost, PostAttachment, AboutContent,
   Book, BookFileType, BookStatus, BookVisibility, BookMetadataVisibility, ReadProgress, ProgressUnit,
   BookHighlight, MyBookHighlight, HighlightAnchorType, HighlightColor, HighlightRect, ContentLanguage,
+  Tool, AdminTool, ToolStatus, ToolVisibility,
 } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
@@ -1356,4 +1357,122 @@ export async function fetchMyHighlights(limit = 100): Promise<MyBookHighlight[]>
     throw new Error('Failed to load your highlights');
   }
   return res.json();
+}
+
+// ── Tools — self-contained HTML/CSS/JS artifacts ────────────────────────────
+
+export interface ToolRequest {
+  title: string;
+  slug: string;
+  category: string;
+  tags: string[];
+  excerpt: string;
+  // Blank/omitted on update leaves the existing source untouched — see
+  // AdminToolController's javadoc. Required on create.
+  htmlSource: string;
+  status: ToolStatus;
+  visibility: ToolVisibility;
+}
+
+export async function fetchTools(query: { q?: string; category?: string } = {}): Promise<Tool[]> {
+  const params = new URLSearchParams();
+  if (query.q) params.set('q', query.q);
+  if (query.category) params.set('category', query.category);
+
+  const response = await fetch(`${API_BASE_URL}/tools?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error('Unable to load tools');
+  }
+  return response.json();
+}
+
+export async function fetchToolBySlug(slug: string): Promise<Tool> {
+  const response = await fetch(`${API_BASE_URL}/tools/${slug}`);
+  if (response.status === 404) {
+    throw new Error('Tool not found');
+  }
+  if (!response.ok) {
+    throw new Error('Unable to load tool');
+  }
+  return response.json();
+}
+
+export async function recordToolView(slug: string): Promise<void> {
+  await fetch(`${API_BASE_URL}/tools/${slug}/view`, { method: 'POST' });
+  // fire-and-forget — ignore errors silently, same convention as recordPostView
+}
+
+export async function fetchAdminTools(): Promise<Tool[]> {
+  const response = await fetch(`${API_BASE_URL}/admin/tools`, { headers: authHeader() });
+  if (response.status === 401 || response.status === 403) throw new UnauthorizedError();
+  if (!response.ok) throw new Error('Unable to load tools');
+  return response.json();
+}
+
+export async function fetchAdminTool(id: number): Promise<AdminTool> {
+  const response = await fetch(`${API_BASE_URL}/admin/tools/${id}`, { headers: authHeader() });
+  if (response.status === 401 || response.status === 403) throw new UnauthorizedError();
+  if (!response.ok) throw new Error('Unable to load tool');
+  return response.json();
+}
+
+function toolFormData(data: ToolRequest, coverImage?: File): FormData {
+  const fd = new FormData();
+  fd.append('title', data.title);
+  fd.append('slug', data.slug);
+  fd.append('category', data.category);
+  fd.append('tags', data.tags.join(','));
+  fd.append('excerpt', data.excerpt);
+  fd.append('htmlSource', data.htmlSource);
+  fd.append('status', data.status);
+  fd.append('visibility', data.visibility);
+  if (coverImage) fd.append('coverImage', coverImage);
+  return fd;
+}
+
+export async function createTool(data: ToolRequest, coverImage?: File): Promise<Tool> {
+  const response = await fetch(`${API_BASE_URL}/admin/tools`, {
+    method: 'POST',
+    headers: { ...authHeader() },
+    body: toolFormData(data, coverImage),
+  });
+  if (response.status === 401 || response.status === 403) throw new UnauthorizedError();
+  if (!response.ok) {
+    const b = await response.json().catch(() => ({}));
+    throw new Error((b as { message?: string }).message ?? 'Failed to create tool');
+  }
+  return response.json();
+}
+
+export async function updateTool(
+  id: number,
+  data: ToolRequest,
+  coverImage?: File,
+  removeCoverImage?: boolean,
+): Promise<Tool> {
+  const fd = toolFormData(data, coverImage);
+  fd.append('removeCoverImage', removeCoverImage ? 'true' : 'false');
+
+  const response = await fetch(`${API_BASE_URL}/admin/tools/${id}`, {
+    method: 'PUT',
+    headers: { ...authHeader() },
+    body: fd,
+  });
+  if (response.status === 401 || response.status === 403) throw new UnauthorizedError();
+  if (!response.ok) {
+    const b = await response.json().catch(() => ({}));
+    throw new Error((b as { message?: string }).message ?? 'Failed to update tool');
+  }
+  return response.json();
+}
+
+export async function deleteTool(id: number): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/admin/tools/${id}`, {
+    method: 'DELETE',
+    headers: { ...authHeader() },
+  });
+  if (response.status === 401 || response.status === 403) throw new UnauthorizedError();
+  if (!response.ok) {
+    throw new Error('Failed to delete tool');
+  }
 }
