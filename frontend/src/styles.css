@@ -2612,8 +2612,15 @@ img {
 /* ── Comment form ──────────────────────────────────────────────────────────── */
 
 .comment-form-wrap {
-  background: #f0f4ff;
-  border: 1px solid #dbe4ff;
+  /* Was a hardcoded light-blue hex that never darkened for dark mode, while
+     .comment-form__heading below correctly uses --color-text (which does) —
+     same near-white-on-near-white bug already fixed elsewhere (.post-card__
+     read-more, .inline-code, etc.). Translucent accent tint instead, same
+     idiom as .post-card__category/.post-detail__category: it's a tint over
+     whatever surface it sits on, so it holds up in both themes without a
+     separate dark-mode override. */
+  background: rgba(61,79,232,0.08);
+  border: 1px solid rgba(61,79,232,0.2);
   border-radius: 12px;
   padding: 28px 28px 24px;
 }
@@ -2636,9 +2643,13 @@ img {
 }
 
 .comment-form__error {
-  background: #fef2f2;
+  /* Same bug, found while fixing .comment-form-wrap above: hardcoded light-pink
+     hex that never darkens, even though `color` already correctly uses the
+     theme-aware --color-error token. Use the matching --color-error-bg/-border
+     tokens instead — they already have proper dark-mode values. */
+  background: var(--color-error-bg);
   color: var(--color-error);
-  border: 1px solid #fca5a5;
+  border: 1px solid var(--color-error-border);
   border-radius: 8px;
   padding: 10px 14px;
   font-size: 14px;
@@ -3382,8 +3393,12 @@ img {
 }
 
 .exam-take-option--selected {
+  /* Same bug as .comment-form-wrap: a hardcoded light-cream hex that never
+     darkens, while .exam-take-option's `color` already correctly uses
+     --color-text (near-white in dark mode) — near-white text on a
+     near-white background. Same accent-tint fix. */
   border-color: var(--color-accent);
-  background: #fffbeb;
+  background: rgba(61,79,232,0.08);
   font-weight: 500;
 }
 

@@ -2172,3 +2172,57 @@ validation ever did for the other 4 types, and out of scope for a
 "add two more extensions" request. Noted as a possible future hardening
 step, not a regression introduced here (the extension-only check is
 exactly as strong as the content-type-only check it replaced).
+
+## 2026-08-11 — More `--color-navy`-class dark-mode contrast bugs (comment form + exam options)
+
+Summary: user re-reported the same bug *class* fixed earlier the same day
+(2026-08-11's "typography/category color/dark-mode contrast" entry above),
+this time in `.comment-form-wrap` on the post detail page — user did their
+own CSS inspection and named the exact cause: `.comment-form__heading`
+correctly uses `var(--color-text)` (near-white in dark mode), but
+`.comment-form-wrap` kept a hardcoded `#f0f4ff` (light blue) background
+that never darkens, so dark-mode readers got near-white text on a
+near-white box.
+
+That earlier fix only audited `color: var(--color-navy)` usages — this bug
+is the same root cause (a var()-based, theme-flipping text/border color
+paired with a sibling/parent using a literal light-only hex) but on a
+*different* token (`--color-text`, not `--color-navy`), so it wasn't
+caught by that audit's search term. Broadened the sweep this time: grepped
+every `background: #`/`border: ... #` literal in `styles.css` and checked
+each one's text color for a theme-flipping `var(--color-text*)`/
+`var(--color-error)` sibling. Found and fixed three:
+
+1. `.comment-form-wrap` (reported) — `#f0f4ff`/`#dbe4ff` → the same
+   accent-tint idiom already used by `.post-card__category` etc.
+   (`rgba(61,79,232,0.08)` bg / `rgba(61,79,232,0.2)` border) — a
+   translucent tint over whatever surface it sits on holds up in both
+   themes without a separate dark-mode override.
+2. `.comment-form__error` (found right next to it) — hardcoded
+   `#fef2f2`/`#fca5a5` duplicating (imprecisely) the *light-mode-only*
+   values of `--color-error-bg`/`--color-error-border`, which already have
+   correct dark-mode values. Switched to the tokens.
+3. `.exam-take-option--selected` (member exam-taking flow) — `background:
+   #fffbeb` (light cream) while the base `.exam-take-option` rule sets
+   `color: var(--color-text)` — same bug, selecting an answer in dark mode
+   produced near-white text on a near-white box. Same accent-tint fix.
+
+Audited but left alone (confirmed not broken, just not dark-mode-styled):
+`.badge--*`/`.status-badge--*`/`.home-exam-card__badge`/
+`.exam-question-card__num` — all pair a literal background with a
+*literal* (non-`var()`) text color, so they're self-contained and legible
+in both themes, just don't restyle for dark mode aesthetically. Same
+"admin badges out of scope" call as the earlier entry, extended to the
+two public-facing exam badges since they have the identical
+self-contained-and-legible property.
+
+Files touched: `frontend/src/styles.css` only.
+
+Checks run: `npm run typecheck`/`lint`/`build` — all clean.
+
+Process note for next time: when auditing a "text color token flips,
+background doesn't" bug, grep for the *symptom* (`background: #` /
+`border: ... #` literals, cross-checked against nearby `var(--color-text`/
+`var(--color-error`/etc.), not the *specific token name* that happened to
+be involved in the first report — the same defect recurs under different
+token names (`--color-navy` this morning, `--color-text` this afternoon).
