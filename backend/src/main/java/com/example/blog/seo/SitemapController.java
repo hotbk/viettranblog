@@ -6,6 +6,7 @@ import com.example.blog.post.PostStatus;
 import com.example.blog.post.PostVisibility;
 import com.example.blog.series.Series;
 import com.example.blog.series.SeriesRepository;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
@@ -15,7 +16,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -43,7 +46,7 @@ public class SitemapController {
     }
 
     @GetMapping(value = "/api/sitemap.xml", produces = MediaType.APPLICATION_XML_VALUE)
-    public String sitemap() {
+    public ResponseEntity<String> sitemap() {
         StringBuilder xml = new StringBuilder();
         xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         // xhtml namespace is required for the <xhtml:link rel="alternate" hreflang="..."> elements
@@ -73,7 +76,13 @@ public class SitemapController {
         }
 
         xml.append("</urlset>\n");
-        return xml.toString();
+        // PUBLISHED+PUBLIC only (queried above), so unconditionally safe for a shared cache.
+        // 1h balances "a new post shows up for crawlers reasonably soon" against not rebuilding
+        // this from two full table scans on every crawler hit — the sitemap protocol doesn't
+        // expect realtime freshness anyway.
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(Duration.ofHours(1)).cachePublic())
+                .body(xml.toString());
     }
 
     /**

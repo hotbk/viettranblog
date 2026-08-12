@@ -1,7 +1,9 @@
 package com.example.blog.tool;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -45,17 +47,28 @@ public class PublicToolController {
     @GetMapping("/api/tools/{slug}/raw")
     public ResponseEntity<String> raw(@PathVariable String slug) {
         String html = toolService.getRawHtml(slug);
+        // getRawHtml already 404s unless PUBLISHED+PUBLIC, so by this point the content is
+        // unconditionally safe for a shared cache — unlike the two cover-image endpoints below.
         return ResponseEntity.ok()
                 .contentType(new MediaType("text", "html", StandardCharsets.UTF_8))
                 .header("X-Frame-Options", "SAMEORIGIN")
                 .header("Content-Security-Policy", "frame-ancestors 'self'")
+                .cacheControl(CacheControl.maxAge(Duration.ofMinutes(10)).cachePublic())
                 .body(html);
     }
 
     @GetMapping("/api/tools/{id}/cover-image")
     public ResponseEntity<byte[]> getCoverImage(@PathVariable Long id) {
+        // getCoverImageTool now 404s a DRAFT/PRIVATE tool's cover for anyone but staff (fixed
+        // alongside this caching pass — see its javadoc). A staff caller can still reach the
+        // PRIVATE branch below, so this stays visibility-conditional rather than always-public:
+        // a shared/CDN cache must never be handed a PRIVATE tool's cover to serve back to anyone else.
         Tool tool = toolService.getCoverImageTool(id);
+        CacheControl cacheControl = tool.getVisibility() == ToolVisibility.PUBLIC
+                ? CacheControl.maxAge(Duration.ofMinutes(10)).cachePublic()
+                : CacheControl.noStore();
         return ResponseEntity.ok()
+                .cacheControl(cacheControl)
                 .contentType(MediaType.parseMediaType(tool.getCoverImageContentType()))
                 .body(tool.getCoverImageData());
     }

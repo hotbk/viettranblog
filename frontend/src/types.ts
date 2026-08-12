@@ -296,7 +296,7 @@ export interface BlogPost {
   translations: TranslationRef[];
 }
 
-export type AttachmentType = 'PDF' | 'DOC' | 'DOCX' | 'TXT' | 'MD' | 'ZIP';
+export type AttachmentType = 'PDF' | 'DOC' | 'DOCX' | 'TXT' | 'MD' | 'SH' | 'SQL' | 'ZIP';
 
 export interface PostAttachment {
   id: number;
@@ -308,7 +308,7 @@ export interface PostAttachment {
   url: string;
 }
 
-export type BookFileType = 'PDF' | 'TXT';
+export type BookFileType = 'PDF' | 'TXT' | 'MD' | 'SH' | 'SQL' | 'DOCX';
 export type BookStatus = 'DRAFT' | 'PUBLISHED';
 export type BookVisibility = 'PUBLIC' | 'PRIVATE';
 export type BookMetadataVisibility = 'PUBLIC_METADATA' | 'AUTHORIZED_ONLY';

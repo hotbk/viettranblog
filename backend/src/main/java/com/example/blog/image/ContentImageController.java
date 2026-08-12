@@ -1,6 +1,7 @@
 package com.example.blog.image;
 
 import com.example.blog.common.NotFoundException;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -8,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.UUID;
@@ -58,7 +60,11 @@ public class ContentImageController {
     public ResponseEntity<byte[]> serve(@PathVariable String id) {
         ContentImage img = imageRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("IMAGE_NOT_FOUND", "Image not found"));
+        // This endpoint was already unauthenticated/ungated (any UUID id resolves regardless of
+        // the embedding post's visibility), so caching adds no new exposure. `immutable` is safe
+        // because there's no update endpoint for a ContentImage — only upload, which mints a new id.
         return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(Duration.ofDays(365)).cachePublic().immutable())
                 .contentType(MediaType.parseMediaType(img.getContentType()))
                 .body(img.getData());
     }

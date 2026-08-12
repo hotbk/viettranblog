@@ -1,7 +1,9 @@
 package com.example.blog.post;
 
 import com.example.blog.common.ContentLanguage;
+import java.time.Duration;
 import java.util.List;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -101,7 +103,15 @@ public class PostController {
     @GetMapping("/{id}/cover-image")
     public ResponseEntity<byte[]> getCoverImage(@PathVariable Long id) {
         Post post = postService.getCoverImagePost(id);
+        // Only PUBLIC posts are safe for a shared/CDN cache — PRIVATE ones already passed
+        // postAccessService.canRead for *this* caller (PostService.getCoverImagePost), and a
+        // public cache can't repeat that check for the next requester. `noStore` keeps today's
+        // behavior (no caching) for those instead of quietly downgrading to `private`.
+        CacheControl cacheControl = post.getVisibility() == PostVisibility.PUBLIC
+                ? CacheControl.maxAge(Duration.ofMinutes(10)).cachePublic()
+                : CacheControl.noStore();
         return ResponseEntity.ok()
+                .cacheControl(cacheControl)
                 .contentType(MediaType.parseMediaType(post.getCoverImageContentType()))
                 .body(post.getCoverImageData());
     }

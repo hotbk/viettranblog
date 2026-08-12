@@ -10,7 +10,7 @@ import {
 import type { UserDetailResponseDto } from '../api';
 import type { AccessGroup, UserStatus } from '../types';
 import { logout } from '../auth';
-import ThemeToggle from '../components/ThemeToggle';
+import AdminTopbar from '../components/AdminTopbar';
 
 const STATUS_LABELS: Record<UserStatus, string> = {
   PENDING: 'Pending', ACTIVE: 'Active', REJECTED: 'Rejected', SUSPENDED: 'Suspended',
@@ -90,26 +90,9 @@ export default function AdminUserDetail() {
     }
   }
 
-  function handleLogout() {
-    logout();
-    navigate('/admin/login');
-  }
-
   return (
     <>
-      <header className="admin-topbar">
-        <div className="admin-topbar__inner">
-          <div className="admin-topbar__brand">
-            <span className="admin-topbar__brand-name">TECH2BLOGS</span>
-            <span className="admin-topbar__brand-sub">Admin Panel</span>
-          </div>
-          <div className="admin-topbar__actions">
-            <ThemeToggle />
-            <Link to="/admin/users" className="admin-topbar__view-site">← Users</Link>
-            <button className="btn--topbar-logout" onClick={handleLogout}>Sign out</button>
-          </div>
-        </div>
-      </header>
+      <AdminTopbar back={{ to: '/admin/users', label: '← Users' }} />
 
       <div className="admin-posts-page">
         {loading && (

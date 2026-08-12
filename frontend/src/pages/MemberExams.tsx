@@ -3,9 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { fetchMemberExams, fetchMyAttempts, UnauthorizedError } from '../api';
 import { memberLogout } from '../memberAuth';
 import type { ExamSummary, AttemptSummary } from '../types';
-import NavBrand from '../components/NavBrand';
-import ThemeToggle from '../components/ThemeToggle';
-import NavUser from '../components/NavUser';
+import MemberNav from '../components/MemberNav';
 
 export default function MemberExams() {
   const navigate = useNavigate();
@@ -33,23 +31,9 @@ export default function MemberExams() {
     return attempts.filter((a) => a.examId === examId);
   }
 
-  function handleLogout() { memberLogout(); navigate('/member/login'); }
-
   return (
     <>
-      <nav className="site-nav">
-        <div className="site-nav__inner">
-          <NavBrand />
-          <div className="site-nav__links">
-            <Link to="/" className="site-nav__link">Home</Link>
-            <Link to="/series" className="site-nav__link">Series</Link>
-            <Link to="/member/history" className="site-nav__link">History</Link>
-            <button className="btn btn--ghost btn--sm" onClick={handleLogout} style={{ marginLeft: 8 }}>Sign out</button>
-            <ThemeToggle />
-            <NavUser />
-          </div>
-        </div>
-      </nav>
+      <MemberNav active="exams" />
 
       <div className="series-list-page">
         <div className="container">

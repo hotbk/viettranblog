@@ -103,6 +103,156 @@ class BookControllerTest {
     }
 
     @Test
+    void uploadValidMarkdownSucceedsAndIsServedAsPlainText() throws Exception {
+        String token = adminToken();
+        MockMultipartFile md = new MockMultipartFile(
+                "file", "README.md", "application/octet-stream", "# Library\n\nHello".getBytes());
+
+        MvcResult result = mockMvc.perform(multipart("/api/admin/books")
+                        .file(md)
+                        .param("title", "Test Book MD")
+                        .param("slug", "bk-md-book")
+                        .param("status", "PUBLISHED")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.fileType").value("MD"))
+                .andReturn();
+
+        mockMvc.perform(get("/api/books/{id}/file", extractId(result)))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("text/plain"));
+    }
+
+    @Test
+    void uploadValidDocxSucceedsAndNormalizesContentType() throws Exception {
+        String token = adminToken();
+        byte[] docxPackage = {'P', 'K', 3, 4, 1, 2, 3, 4};
+        MockMultipartFile docx = new MockMultipartFile(
+                "file", "guide.docx", "application/octet-stream", docxPackage);
+
+        MvcResult result = mockMvc.perform(multipart("/api/admin/books")
+                        .file(docx)
+                        .param("title", "Test Book DOCX")
+                        .param("slug", "bk-docx-book")
+                        .param("status", "PUBLISHED")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.fileType").value("DOCX"))
+                .andReturn();
+
+        mockMvc.perform(get("/api/books/{id}/file", extractId(result)))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"));
+    }
+
+    @Test
+    void uploadRejectsInvalidDocxSignature() throws Exception {
+        String token = adminToken();
+        MockMultipartFile fakeDocx = new MockMultipartFile(
+                "file", "fake.docx", "application/octet-stream", "not a zip package".getBytes());
+
+        mockMvc.perform(multipart("/api/admin/books")
+                        .file(fakeDocx)
+                        .param("title", "Fake DOCX")
+                        .param("slug", "bk-fake-docx")
+                        .param("status", "PUBLISHED")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void uploadValidShSucceeds() throws Exception {
+        String token = adminToken();
+        MockMultipartFile sh = new MockMultipartFile(
+                "file", "backup.sh", "application/octet-stream", "#!/bin/sh\necho hello\n".getBytes());
+
+        mockMvc.perform(multipart("/api/admin/books")
+                        .file(sh)
+                        .param("title", "Test Book SH")
+                        .param("slug", "bk-sh-book")
+                        .param("status", "PUBLISHED")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.fileType").value("SH"));
+    }
+
+    @Test
+    void uploadValidSqlSucceeds() throws Exception {
+        String token = adminToken();
+        // Content-Type here deliberately mimics what real browsers send for an
+        // unrecognized extension — the server must not rely on it (see
+        // BookService.ALLOWED_SCRIPT_EXTENSIONS).
+        MockMultipartFile sql = new MockMultipartFile(
+                "file", "dump.sql", "", "CREATE TABLE t (id INT);\n".getBytes());
+
+        mockMvc.perform(multipart("/api/admin/books")
+                        .file(sql)
+                        .param("title", "Test Book SQL")
+                        .param("slug", "bk-sql-book")
+                        .param("status", "PUBLISHED")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.fileType").value("SQL"));
+    }
+
+    @Test
+    void uploadRejectsBinaryContentDisguisedWithShExtension() throws Exception {
+        // A real extension allowlist match (.sh) is not enough on its own —
+        // the plaintext/magic-byte check must still reject binary bytes.
+        String token = adminToken();
+        byte[] binary = {0x7F, 'E', 'L', 'F', 0, 0, 1, 2, 3};
+        MockMultipartFile fakeSh = new MockMultipartFile("file", "evil.sh", "application/octet-stream", binary);
+
+        mockMvc.perform(multipart("/api/admin/books")
+                        .file(fakeSh)
+                        .param("title", "Fake SH Book")
+                        .param("slug", "bk-fakesh-book")
+                        .param("status", "PUBLISHED")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void uploadOfShIgnoresClientContentTypeAndNormalizesToTextPlain() throws Exception {
+        // Client claims application/pdf for a .sh file — extension governs
+        // type detection, not Content-Type, and the stored Content-Type is
+        // always normalized to text/plain regardless of what was sent.
+        String token = adminToken();
+        MockMultipartFile sh = new MockMultipartFile(
+                "file", "script.sh", "application/pdf", "#!/bin/sh\necho hi\n".getBytes());
+
+        MvcResult result = mockMvc.perform(multipart("/api/admin/books")
+                        .file(sh)
+                        .param("title", "Spoofed CT Book")
+                        .param("slug", "bk-spoofed-ct-book")
+                        .param("status", "PUBLISHED")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.fileType").value("SH"))
+                .andReturn();
+        long id = extractId(result);
+
+        mockMvc.perform(get("/api/books/{id}/file", id))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("text/plain"));
+    }
+
+    @Test
+    void fileAndDownloadResponsesSetNosniffHeader() throws Exception {
+        String token = adminToken();
+        long bookId = createBook(token, "bk-nosniff-book", "PUBLISHED", "PUBLIC", null, true);
+
+        mockMvc.perform(get("/api/books/{id}/file", bookId))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"));
+
+        mockMvc.perform(get("/api/books/{id}/download", bookId))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"));
+    }
+
+    @Test
     void uploadRejectsWhitespaceOnlySlugInsteadOfStoringItEmpty() throws Exception {
         // Regression test: found live via manual testing. A whitespace-only slug
         // passes HTML5 `required` client-side (non-zero length) and used to pass

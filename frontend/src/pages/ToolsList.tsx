@@ -72,7 +72,7 @@ export default function ToolsList() {
         </div>
       </section>
 
-      <div className="container">
+      <div className="container container--wide">
         <div className="filters-bar">
           <div className="filters-bar__inner">
             <div className="filters-bar__search">

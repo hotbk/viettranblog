@@ -7,6 +7,7 @@ import { isMemberAuthenticated } from '../memberAuth';
 import ReaderToolbar from '../components/ReaderToolbar';
 import PdfReader from '../components/PdfReader';
 import TxtReader from '../components/TxtReader';
+import DocxReader from '../components/DocxReader';
 import BookHighlightsPanel from '../components/BookHighlightsPanel';
 import { useReadingProgress } from '../hooks/useReadingProgress';
 import { useBookHighlights } from '../hooks/useBookHighlights';
@@ -192,8 +193,14 @@ export default function BookReaderPage() {
       {readyToRender && book.fileType === 'PDF' && (
         <PdfReader blob={blob} startPage={startPage} onProgress={handlePdfProgress} {...highlightProps} />
       )}
-      {readyToRender && book.fileType === 'TXT' && (
+      {/* TXT, MD, SH, and SQL all read as plain text — TxtReader renders via React
+          children (no dangerouslySetInnerHTML), so script/SQL content is safe
+          to display the same way as any other plaintext book. */}
+      {readyToRender && book.fileType !== 'PDF' && book.fileType !== 'DOCX' && (
         <TxtReader blob={blob} startPercent={startPercent} onProgress={handleTxtProgress} {...highlightProps} />
+      )}
+      {readyToRender && book.fileType === 'DOCX' && (
+        <DocxReader blob={blob} startPercent={startPercent} onProgress={handleTxtProgress} />
       )}
 
       <BookHighlightsPanel

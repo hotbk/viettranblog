@@ -4,9 +4,11 @@ import { fetchPosts, fetchPublicExams } from './api';
 import type { BlogPost, ExamSummary } from './types';
 import { isMemberAuthenticated } from './memberAuth';
 import SiteNav from './components/SiteNav';
+import TagCloud from './components/TagCloud';
 import { useSeo } from './useSeo';
 import { categoryColorClass } from './categoryColor';
 import { getLanguagePreference, languageQueryParam, setLanguagePreference, type LanguagePreference } from './contentLanguage';
+import { getShowTagCloud, setShowTagCloud } from './tagCloudPrefs';
 
 const HOME_DESCRIPTION =
   'Practical PostgreSQL, Oracle, Kubernetes, and AI engineering notes: performance tuning, ' +
@@ -45,9 +47,26 @@ export default function App() {
   const [languagePref, setLanguagePref] = useState<LanguagePreference>(() => getLanguagePreference());
   const isMember = isMemberAuthenticated();
 
+  // Tag cloud: a client-side quick-filter over the already-fetched `posts`
+  // (no server round trip — tags aren't a queryable column, see
+  // PostRepository.search's comment), plus a per-browser show/hide
+  // preference (tagCloudPrefs.ts, same pattern as theme.ts).
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [showTagCloud, setShowTagCloudState] = useState(() => getShowTagCloud());
+
+  function handleToggleTagCloud(show: boolean) {
+    setShowTagCloudState(show);
+    setShowTagCloud(show);
+  }
+
   const categories = useMemo(() => {
     return Array.from(new Set(posts.map((post) => post.category).filter(Boolean))).sort();
   }, [posts]);
+
+  const displayedPosts = useMemo(() => {
+    if (!selectedTag) return posts;
+    return posts.filter((post) => post.tags.includes(selectedTag));
+  }, [posts, selectedTag]);
 
   async function loadPosts() {
     setLoading(true);
@@ -70,9 +89,31 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, category, languagePref]);
 
+  // A new server-side search/category/language change supersedes the tag
+  // quick-filter — otherwise a tag pick from a previous result set could
+  // silently zero out an unrelated new search. Cleared at each of those
+  // three call sites directly (not a reactive effect on their state) —
+  // react-hooks/set-state-in-effect flags the effect-based version as an
+  // avoidable cascading render.
+  function handleQueryChange(next: string) {
+    setQuery(next);
+    setSelectedTag(null);
+  }
+
+  function handleCategoryChange(next: string) {
+    setCategory(next);
+    setSelectedTag(null);
+  }
+
   function handleShowAllLanguages() {
     setLanguagePreference('ALL');
     setLanguagePref('ALL');
+    setSelectedTag(null);
+  }
+
+  function handleLanguageChange(pref: LanguagePreference) {
+    setLanguagePref(pref);
+    setSelectedTag(null);
   }
 
   useEffect(() => {
@@ -95,7 +136,7 @@ export default function App() {
   return (
     <>
       {/* ── Navbar ─────────────────────────────── */}
-      <SiteNav active="home" onLanguageChange={setLanguagePref} />
+      <SiteNav active="home" onLanguageChange={handleLanguageChange} />
 
       {/* ── Hero ───────────────────────────────── */}
       <section className="hero">
@@ -129,6 +170,16 @@ export default function App() {
 
       {/* ── Post List ──────────────────────────── */}
       <div className="container">
+        {!loading && !error && (
+          <TagCloud
+            posts={posts}
+            selectedTag={selectedTag}
+            onSelectTag={setSelectedTag}
+            visible={showTagCloud}
+            onToggleVisible={handleToggleTagCloud}
+          />
+        )}
+
         <div className="filters-bar">
           <div className="filters-bar__inner">
             <div className="filters-bar__search">
@@ -136,7 +187,7 @@ export default function App() {
               <input
                 className="filters-bar__input"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => handleQueryChange(e.target.value)}
                 placeholder="Search posts..."
                 aria-label="Search posts"
               />
@@ -144,7 +195,7 @@ export default function App() {
             <select
               className="filters-bar__select"
               value={category}
-              onChange={(e) => setCategory(e.target.value)}
+              onChange={(e) => handleCategoryChange(e.target.value)}
               aria-label="Filter by category"
             >
               <option value="">All categories</option>
@@ -156,14 +207,20 @@ export default function App() {
         </div>
 
         <section className="post-section">
-          {!loading && (query || category) && (
+          {!loading && (query || category || selectedTag) && (
             <p className="section-label">
-              {posts.length} result{posts.length !== 1 ? 's' : ''}
+              {displayedPosts.length} result{displayedPosts.length !== 1 ? 's' : ''}
               {query ? ` for "${query}"` : ''}
               {category ? ` in ${category}` : ''}
+              {selectedTag ? ` tagged #${selectedTag}` : ''}
+              {selectedTag && (
+                <button type="button" className="section-label__clear-tag" onClick={() => setSelectedTag(null)}>
+                  Clear tag ×
+                </button>
+              )}
             </p>
           )}
-          {!loading && !query && !category && (
+          {!loading && !query && !category && !selectedTag && (
             <p className="section-label">Latest posts</p>
           )}
 
@@ -178,7 +235,7 @@ export default function App() {
             </div>
           )}
 
-          {/* Empty */}
+          {/* Empty — nothing came back from the server at all */}
           {!loading && !error && posts.length === 0 && (
             <div className="empty-state">
               <div className="empty-state__icon">&#128203;</div>
@@ -202,10 +259,22 @@ export default function App() {
             </div>
           )}
 
+          {/* Empty — the tag quick-filter narrowed an otherwise non-empty result set to nothing */}
+          {!loading && !error && posts.length > 0 && displayedPosts.length === 0 && (
+            <div className="empty-state">
+              <div className="empty-state__icon">&#127991;&#65039;</div>
+              <p className="empty-state__title">No posts tagged #{selectedTag}</p>
+              <p className="empty-state__desc">The tag cloud is built from this same result set — try a different tag.</p>
+              <button className="btn btn--ghost" onClick={() => setSelectedTag(null)} style={{ marginTop: 16 }}>
+                Clear tag filter
+              </button>
+            </div>
+          )}
+
           {/* Post grid */}
-          {!loading && !error && posts.length > 0 && (
+          {!loading && !error && displayedPosts.length > 0 && (
             <div className="post-grid">
-              {posts.map((post) => (
+              {displayedPosts.map((post) => (
                 <PostCard key={post.id} post={post} />
               ))}
             </div>

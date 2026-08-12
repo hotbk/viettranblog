@@ -3,9 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { fetchMyAttempts, UnauthorizedError } from '../api';
 import { memberLogout } from '../memberAuth';
 import type { AttemptSummary } from '../types';
-import NavBrand from '../components/NavBrand';
-import ThemeToggle from '../components/ThemeToggle';
-import NavUser from '../components/NavUser';
+import MemberNav from '../components/MemberNav';
 
 function formatDate(s: string | null): string {
   if (!s) return '—';
@@ -50,22 +48,9 @@ export default function MemberHistory() {
     ? Math.round(submitted.reduce((acc, a) => acc + ((a.score ?? 0) / (a.totalPoints ?? 1)) * 100, 0) / submitted.length)
     : null;
 
-  function handleLogout() { memberLogout(); navigate('/member/login'); }
-
   return (
     <>
-      <nav className="site-nav">
-        <div className="site-nav__inner">
-          <NavBrand />
-          <div className="site-nav__links">
-            <Link to="/" className="site-nav__link">Home</Link>
-            <Link to="/member/exams" className="site-nav__link">Exams</Link>
-            <button className="btn btn--ghost btn--sm" onClick={handleLogout} style={{ marginLeft: 8 }}>Sign out</button>
-            <ThemeToggle />
-            <NavUser />
-          </div>
-        </div>
-      </nav>
+      <MemberNav active="history" />
 
       <div className="series-list-page">
         <div className="container">

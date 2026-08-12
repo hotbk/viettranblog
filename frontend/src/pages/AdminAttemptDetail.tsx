@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import { fetchAdminAttemptDetail, UnauthorizedError } from '../api';
 import { logout } from '../auth';
-import ThemeToggle from '../components/ThemeToggle';
+import AdminTopbar from '../components/AdminTopbar';
 import type { AdminAttemptDetail } from '../types';
 
 function formatDate(s: string | null): string {
@@ -35,7 +35,6 @@ export default function AdminAttemptDetailPage() {
     return () => { cancelled = true; };
   }, [id, navigate]);
 
-  function handleLogout() { logout(); navigate('/admin/login'); }
 
   const pct = attempt?.totalPoints && attempt.totalPoints > 0
     ? Math.round(((attempt.score ?? 0) / attempt.totalPoints) * 100)
@@ -43,20 +42,7 @@ export default function AdminAttemptDetailPage() {
 
   return (
     <>
-      <header className="admin-topbar">
-        <div className="admin-topbar__inner">
-          <div className="admin-topbar__brand">
-            <span className="admin-topbar__brand-name">TECH2BLOGS</span>
-            <span className="admin-topbar__brand-sub">Admin Panel</span>
-          </div>
-          <div className="admin-topbar__actions">
-            <ThemeToggle />
-            <Link to="/admin/attempts" className="admin-topbar__view-site">← Attempts</Link>
-            <Link to="/" className="admin-topbar__view-site">View site &rarr;</Link>
-            <button className="btn--topbar-logout" onClick={handleLogout}>Sign out</button>
-          </div>
-        </div>
-      </header>
+      <AdminTopbar back={{ to: '/admin/attempts', label: '← Attempts' }} />
 
       <div className="admin-posts-page">
         {loading && (

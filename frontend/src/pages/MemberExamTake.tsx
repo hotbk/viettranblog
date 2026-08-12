@@ -5,9 +5,7 @@ import rehypeRaw from 'rehype-raw';
 import { fetchMemberExam, startAttempt, submitAttempt, UnauthorizedError } from '../api';
 import { memberLogout } from '../memberAuth';
 import type { ExamDetailMember, AttemptDetail } from '../types';
-import NavBrand from '../components/NavBrand';
-import ThemeToggle from '../components/ThemeToggle';
-import NavUser from '../components/NavUser';
+import MemberNav from '../components/MemberNav';
 
 type Phase = 'loading' | 'ready' | 'taking' | 'result' | 'error';
 
@@ -156,16 +154,7 @@ export default function MemberExamTake() {
 
   return (
     <>
-      <nav className="site-nav">
-        <div className="site-nav__inner">
-          <NavBrand />
-          <div className="site-nav__links">
-            <Link to="/member/exams" className="site-nav__link">← Exams</Link>
-            <ThemeToggle />
-            <NavUser />
-          </div>
-        </div>
-      </nav>
+      <MemberNav back={{ to: '/member/exams', label: '← Exams' }} />
 
       <div className="series-detail-page">
         <div className="container">

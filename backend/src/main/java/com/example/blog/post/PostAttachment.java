@@ -15,7 +15,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 
 /**
- * A downloadable/viewable file attached to a post (PDF/DOC/DOCX/TXT/MD/ZIP). Unlike
+ * A downloadable/viewable file attached to a post (PDF/DOC/DOCX/TXT/MD/SH/SQL/ZIP). Unlike
  * {@code content_images}/{@code content_videos} (pasted into Markdown content,
  * no post FK — a known access-control gap, see docs/06-project-memory.md),
  * this table has a required {@code post_id} FK from day one so access checks

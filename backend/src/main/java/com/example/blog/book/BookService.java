@@ -40,6 +40,22 @@ public class BookService {
             "text/plain", BookFileType.TXT
     );
 
+    /**
+     * SH/SQL have no standardized browser-assigned Content-Type — it varies
+     * across OS/browser (empty string, application/octet-stream, text/x-sh,
+     * application/x-sql, ...) — so unlike {@link #ALLOWED_BOOK_TYPES} above,
+     * these two are gated by file extension instead, and the client-supplied
+     * Content-Type for them is never trusted or stored (see applyFile). The
+     * actual security boundary is the plaintext content check shared with
+     * TXT in {@link #validateMagicBytes}, not the extension or Content-Type.
+     */
+    private static final Map<String, BookFileType> ALLOWED_EXTENSION_TYPES = Map.of(
+            "md", BookFileType.MD,
+            "sh", BookFileType.SH,
+            "sql", BookFileType.SQL,
+            "docx", BookFileType.DOCX
+    );
+
     private final BookRepository bookRepository;
     private final BookFileRepository bookFileRepository;
     private final BookReadingProgressRepository progressRepository;
@@ -465,9 +481,19 @@ public class BookService {
 
     private static void applyFile(Book book, MultipartFile file) {
         String contentType = file.getContentType();
-        BookFileType type = contentType == null ? null : ALLOWED_BOOK_TYPES.get(contentType);
+        BookFileType type = ALLOWED_EXTENSION_TYPES.get(fileExtension(file.getOriginalFilename()));
+        if (type != null) {
+            // Extension detection avoids inconsistent browser MIME values. The
+            // stored type is normalized so responses cannot inherit a spoofed
+            // client-supplied Content-Type.
+            contentType = type == BookFileType.DOCX
+                    ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    : "text/plain";
+        } else {
+            type = contentType == null ? null : ALLOWED_BOOK_TYPES.get(contentType);
+        }
         if (type == null) {
-            throw new IllegalArgumentException("Invalid book file type. Allowed types: PDF, TXT");
+            throw new IllegalArgumentException("Invalid book file type. Allowed types: PDF, TXT, MD, SH, SQL, DOCX");
         }
         if (file.getSize() > MAX_BOOK_SIZE) {
             throw new IllegalArgumentException("Book file exceeds maximum allowed size of 50 MB");
@@ -497,9 +523,11 @@ public class BookService {
     }
 
     /**
-     * Client-supplied Content-Type is trusted for the allowlist check above,
-     * but not for anything else — a renamed binary claiming application/pdf is
-     * a cheap thing to catch (R9 in docs/08-book-library-module.md).
+     * Client-supplied Content-Type is trusted for the PDF/TXT allowlist above
+     * (and not trusted for extension-detected formats),
+     * but not for anything else — a renamed binary claiming application/pdf,
+     * or a renamed binary claiming to be a .sh/.sql script, is a cheap thing
+     * to catch (R9 in docs/08-book-library-module.md).
      */
     private static void validateMagicBytes(BookFileType type, byte[] data) {
         if (type == BookFileType.PDF) {
@@ -507,9 +535,18 @@ public class BookService {
             if (data.length < sig.length || !startsWith(data, sig)) {
                 throw new IllegalArgumentException("File does not look like a valid PDF");
             }
+        } else if (type == BookFileType.DOCX) {
+            // DOCX is an OOXML ZIP package. This inexpensive signature check
+            // rejects ordinary binary files merely renamed to .docx.
+            byte[] zipSig = {'P', 'K', 3, 4};
+            if (data.length < zipSig.length || !startsWith(data, zipSig)) {
+                throw new IllegalArgumentException("File does not look like a valid DOCX document");
+            }
         } else {
-            // TXT: reject anything that looks binary — a NUL byte in the first
-            // few KB is not something a real text file contains.
+            // TXT/MD/SH/SQL: reject anything that looks binary — a NUL byte in
+            // the first few KB is not something a real plaintext file
+            // contains. This, not the extension or Content-Type, is the real
+            // gate for SH/SQL uploads.
             int scanLen = Math.min(data.length, 8000);
             for (int i = 0; i < scanLen; i++) {
                 if (data[i] == 0) {
@@ -517,6 +554,18 @@ public class BookService {
                 }
             }
         }
+    }
+
+    /** Lowercased extension without the dot, or "" if there isn't one. */
+    private static String fileExtension(String filename) {
+        if (filename == null) {
+            return "";
+        }
+        int dot = filename.lastIndexOf('.');
+        if (dot < 0 || dot == filename.length() - 1) {
+            return "";
+        }
+        return filename.substring(dot + 1).toLowerCase(java.util.Locale.ROOT);
     }
 
     private static boolean startsWith(byte[] data, byte[] prefix) {
@@ -556,7 +605,12 @@ public class BookService {
         if (filename == null) {
             return "book";
         }
-        String sanitized = filename.replaceAll("[/\\\\]", "_");
+        // Strip path separators (path traversal) and raw control characters
+        // (CR/LF/NUL, ...) — defense in depth. ContentDisposition.builder
+        // already percent-encodes the header value, so this mainly keeps the
+        // stored/displayed name itself clean, which matters more now that
+        // uploads can be scripts a reader might copy-paste from.
+        String sanitized = filename.replaceAll("[/\\\\]", "_").replaceAll("\\p{Cntrl}", "_");
         if (sanitized.length() > 255) {
             sanitized = sanitized.substring(sanitized.length() - 255);
         }

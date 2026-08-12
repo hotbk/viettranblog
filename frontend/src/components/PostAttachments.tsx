@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import { fetchAttachmentBlob } from '../api';
 import type { PostAttachment, AttachmentType } from '../types';
 
-const ICONS: Record<AttachmentType, string> = { PDF: '📕', DOC: '📄', DOCX: '📄', TXT: '📃', MD: '📝', ZIP: '🗜️' };
+const ICONS: Record<AttachmentType, string> = { PDF: '📕', DOC: '📄', DOCX: '📄', TXT: '📃', MD: '📝', SH: '⌨️', SQL: '🗄️', ZIP: '🗜️' };
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -61,7 +61,8 @@ function AttachmentViewerModal({ attachment, onClose }: { attachment: PostAttach
         const blob = await fetchAttachmentBlob(attachment.url);
         if (cancelled) return;
 
-        if (attachment.attachmentType === 'TXT' || attachment.attachmentType === 'MD') {
+        if (attachment.attachmentType === 'TXT' || attachment.attachmentType === 'MD'
+            || attachment.attachmentType === 'SH' || attachment.attachmentType === 'SQL') {
           const text = await blob.text();
           if (cancelled) return;
           setTextContent(text);
@@ -141,7 +142,7 @@ function AttachmentViewerModal({ attachment, onClose }: { attachment: PostAttach
             <iframe src={downloadUrl} title={attachment.originalFilename} className="attachment-modal__pdf" />
           )}
 
-          {state === 'ready' && attachment.attachmentType === 'TXT' && (
+          {state === 'ready' && ['TXT', 'SH', 'SQL'].includes(attachment.attachmentType) && (
             <pre className="attachment-modal__text">{textContent}</pre>
           )}
 

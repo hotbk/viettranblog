@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   fetchAdminAccessRequests, approveAccessRequest, rejectAccessRequest, fetchAccessGroups,
   UnauthorizedError,
 } from '../api';
 import type { AccessRequest, AccessGroup } from '../types';
 import { logout } from '../auth';
-import ThemeToggle from '../components/ThemeToggle';
+import AdminTopbar from '../components/AdminTopbar';
 
 function formatDate(iso: string) {
   return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
@@ -22,7 +22,6 @@ export default function AdminAccessRequests() {
   const [busyId, setBusyId] = useState<number | null>(null);
 
   function handleUnauth() { logout(); navigate('/admin/login'); }
-  function handleLogout() { logout(); navigate('/admin/login'); }
 
   function load() {
     Promise.all([fetchAdminAccessRequests('PENDING'), fetchAccessGroups()])
@@ -85,26 +84,7 @@ export default function AdminAccessRequests() {
 
   return (
     <>
-      <header className="admin-topbar">
-        <div className="admin-topbar__inner">
-          <div className="admin-topbar__brand">
-            <span className="admin-topbar__brand-name">TECH2BLOGS</span>
-            <span className="admin-topbar__brand-sub">Admin Panel</span>
-          </div>
-          <div className="admin-topbar__actions">
-            <ThemeToggle />
-            <Link to="/admin/posts" className="admin-topbar__view-site">Posts</Link>
-            <Link to="/admin/users" className="admin-topbar__view-site">Users</Link>
-            <Link to="/admin/access-groups" className="admin-topbar__view-site">Access Groups</Link>
-            <Link to="/admin/audit-logs" className="admin-topbar__view-site">Audit Logs</Link>
-            <Link to="/admin/about" className="admin-topbar__view-site">About</Link>
-            <Link to="/admin/books" className="admin-topbar__view-site">Books</Link>
-            <Link to="/admin/tools" className="admin-topbar__view-site">Tools</Link>
-            <Link to="/" className="admin-topbar__view-site">View site &rarr;</Link>
-            <button className="btn--topbar-logout" onClick={handleLogout}>Sign out</button>
-          </div>
-        </div>
-      </header>
+      <AdminTopbar active="accessRequests" />
 
       <div className="admin-posts-page">
         <div className="admin-page-header">

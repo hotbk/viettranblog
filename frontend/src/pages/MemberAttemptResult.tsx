@@ -5,9 +5,7 @@ import rehypeRaw from 'rehype-raw';
 import { fetchAttemptDetail, UnauthorizedError } from '../api';
 import { memberLogout } from '../memberAuth';
 import type { AttemptDetail } from '../types';
-import NavBrand from '../components/NavBrand';
-import ThemeToggle from '../components/ThemeToggle';
-import NavUser from '../components/NavUser';
+import MemberNav from '../components/MemberNav';
 
 function formatDuration(seconds: number | null): string {
   if (seconds == null) return '—';
@@ -46,16 +44,7 @@ export default function MemberAttemptResult() {
 
   return (
     <>
-      <nav className="site-nav">
-        <div className="site-nav__inner">
-          <NavBrand />
-          <div className="site-nav__links">
-            <Link to="/member/exams" className="site-nav__link">← Exams</Link>
-            <ThemeToggle />
-            <NavUser />
-          </div>
-        </div>
-      </nav>
+      <MemberNav back={{ to: '/member/exams', label: '← Exams' }} />
 
       <div className="series-detail-page">
         <div className="container">

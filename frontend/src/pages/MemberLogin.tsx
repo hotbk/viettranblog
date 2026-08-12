@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { memberLogin } from '../memberAuth';
-import NavBrand from '../components/NavBrand';
-import ThemeToggle from '../components/ThemeToggle';
-import NavUser from '../components/NavUser';
+import MemberNav from '../components/MemberNav';
 
 export default function MemberLogin() {
   const navigate = useNavigate();
@@ -28,16 +26,7 @@ export default function MemberLogin() {
 
   return (
     <div className="admin-login-page">
-      <nav className="site-nav" style={{ position: 'static', marginBottom: 0 }}>
-        <div className="site-nav__inner">
-          <NavBrand />
-          <div className="site-nav__links">
-            <Link to="/" className="site-nav__link">Home</Link>
-            <ThemeToggle />
-            <NavUser />
-          </div>
-        </div>
-      </nav>
+      <MemberNav guest />
 
       <div className="admin-login-wrap">
         <div className="admin-login-card">

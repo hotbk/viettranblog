@@ -468,6 +468,73 @@ img {
 }
 
 /* ============================================================
+   HOME PAGE — Tag Cloud (popularity-weighted, hideable)
+   ============================================================ */
+.tag-cloud {
+  padding-top: 28px;
+}
+
+.tag-cloud__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.tag-cloud__title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--color-text-light);
+}
+
+.tag-cloud__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.tag-cloud__toggle input {
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.tag-cloud__cloud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  padding-bottom: 8px;
+}
+
+.tag-cloud__tag {
+  border: none;
+  background: none;
+  padding: 2px 2px;
+  color: var(--color-accent-dark);
+  line-height: 1.3;
+  cursor: pointer;
+  transition: opacity var(--transition), color var(--transition);
+  font-family: var(--font-body);
+}
+
+.tag-cloud__tag:hover {
+  opacity: 1 !important;
+  text-decoration: underline;
+}
+
+.tag-cloud__tag--selected {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+/* ============================================================
    HOME PAGE — Filters & Search
    ============================================================ */
 .filters-bar {
@@ -547,6 +614,23 @@ img {
   letter-spacing: 1.2px;
   color: var(--color-text-light);
   margin-bottom: 20px;
+}
+
+.section-label__clear-tag {
+  border: none;
+  background: none;
+  margin-left: 10px;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.section-label__clear-tag:hover {
+  text-decoration: underline;
 }
 
 .post-grid {
@@ -753,6 +837,74 @@ img {
   margin: 0 auto;
 }
 
+/* ── Reading controls (font size + hide-related toggle) ───── */
+.reading-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 0 0 20px;
+}
+
+.reading-controls__group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+}
+
+.reading-controls__btn {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border: none;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: none;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+
+.reading-controls__btn:hover:not(:disabled) {
+  background: var(--color-border-soft);
+}
+
+.reading-controls__btn:disabled {
+  color: var(--color-text-muted);
+  cursor: default;
+  opacity: 0.5;
+}
+
+.reading-controls__size-label {
+  min-width: 22px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.reading-controls__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.reading-controls__toggle input {
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
 .post-detail__layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
@@ -763,6 +915,18 @@ img {
 .post-detail__main {
   max-width: 760px;
   min-width: 0;
+}
+
+/* "Hide related posts" (ReadingControls) — single column, and the article
+   gets to use the width the sidebar would have taken instead of staying
+   pinned at the 760px reading width. */
+.post-detail__layout--full {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.post-detail__layout--full .post-detail__main {
+  max-width: 900px;
+  margin-inline: auto;
 }
 
 @media (max-width: 900px) {
@@ -1341,6 +1505,18 @@ img {
   margin: 12px 0 0;
 }
 
+/* ToolDetail reuses PostDetail's .post-detail-page/.container/.post-detail__narrow
+   (readable-width) shell, but a tool's whole point is the embedded iframe, not
+   prose — so this page gets its own wider caps instead of the shared 1100px/
+   760px, without touching those other three pages that still want them. */
+.tool-detail-page .container {
+  max-width: 1400px;
+}
+
+.tool-detail-page .post-detail__narrow {
+  max-width: 1400px;
+}
+
 .tool-detail__frame {
   width: 100%;
   border: 1px solid var(--color-border);
@@ -1870,6 +2046,13 @@ img {
   padding: 32px 24px 64px;
   max-width: 1200px;
   margin-inline: auto;
+}
+
+/* Wider variant for panels whose content benefits from more horizontal room
+   (currently just the tool form's HTML-source textarea/preview iframe) —
+   opt-in modifier so every other admin page stays at the shared 1200px. */
+.admin-posts-page--wide {
+  max-width: 1600px;
 }
 
 .admin-page-header {
@@ -3876,6 +4059,22 @@ img {
   color: var(--color-text);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.reader-body__docx {
+  max-width: 70ch;
+  width: 100%;
+  padding: 32px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  line-height: 1.7;
+  box-shadow: var(--shadow-md);
+  overflow-wrap: anywhere;
+}
+
+.reader-body__docx img {
+  max-width: 100%;
+  height: auto;
 }
 
 .reader-resume-prompt {

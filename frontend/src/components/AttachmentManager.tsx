@@ -13,11 +13,13 @@ const ALLOWED_EXTENSIONS: Record<string, AttachmentType> = {
   docx: 'DOCX',
   txt: 'TXT',
   md: 'MD',
+  sh: 'SH',
+  sql: 'SQL',
   zip: 'ZIP',
 };
 const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024; // 20 MB
 
-const ICONS: Record<AttachmentType, string> = { PDF: '📕', DOC: '📄', DOCX: '📄', TXT: '📃', MD: '📝', ZIP: '🗜️' };
+const ICONS: Record<AttachmentType, string> = { PDF: '📕', DOC: '📄', DOCX: '📄', TXT: '📃', MD: '📝', SH: '⌨️', SQL: '🗄️', ZIP: '🗜️' };
 
 function extensionOf(filename: string): string {
   const dot = filename.lastIndexOf('.');
@@ -53,7 +55,7 @@ export default function AttachmentManager({ postId, initialAttachments, onAuthEr
     setUploadError(null);
 
     if (!(extensionOf(file.name) in ALLOWED_EXTENSIONS)) {
-      setUploadError('Only PDF, DOC, DOCX, TXT, MD, or ZIP files are accepted.');
+      setUploadError('Only PDF, DOC, DOCX, TXT, MD, SH, SQL, or ZIP files are accepted.');
       e.target.value = '';
       return;
     }
@@ -121,7 +123,7 @@ export default function AttachmentManager({ postId, initialAttachments, onAuthEr
       <input
         ref={fileInputRef}
         type="file"
-        accept=".pdf,.doc,.docx,.txt,.md,.zip,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,application/zip"
+        accept=".pdf,.doc,.docx,.txt,.md,.sh,.sql,.zip,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,application/zip"
         style={{ display: 'none' }}
         onChange={handleFileChange}
       />
@@ -142,7 +144,7 @@ export default function AttachmentManager({ postId, initialAttachments, onAuthEr
       )}
 
       <p style={{ marginTop: 6, fontSize: 12, color: 'var(--color-text-muted)' }}>
-        PDF, DOC, DOCX, TXT, MD, or ZIP — max 20 MB each
+        PDF, DOC, DOCX, TXT, MD, SH, SQL, or ZIP — max 20 MB each
       </p>
     </div>
   );

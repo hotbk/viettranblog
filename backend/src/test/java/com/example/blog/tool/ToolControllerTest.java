@@ -23,10 +23,12 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 /** Admin CRUD + the public listing/raw-HTML surface for the Tools module
  * (docs/04-api-contract.md §11). The load-bearing behavior is `/raw`: it must
@@ -193,6 +195,43 @@ class ToolControllerTest {
                 .andExpect(jsonPath("$.viewCount").value(1));
     }
 
+    // --- cover-image visibility (ToolService.getCoverImageTool) ---
+
+    @Test
+    void coverImageOfPublishedPublicToolIsServedAnonymously() throws Exception {
+        String token = adminToken();
+        long id = createToolWithCoverImage(token, "cover-public-tool", "PUBLISHED", "PUBLIC")
+                .get("id").asLong();
+
+        mockMvc.perform(get("/api/tools/{id}/cover-image", id))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "image/jpeg"));
+    }
+
+    @Test
+    void coverImageOfPrivateToolIs404ForAnonymousButOkForAdmin() throws Exception {
+        String token = adminToken();
+        long id = createToolWithCoverImage(token, "cover-private-tool", "PUBLISHED", "PRIVATE")
+                .get("id").asLong();
+
+        mockMvc.perform(get("/api/tools/{id}/cover-image", id))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(get("/api/tools/{id}/cover-image", id)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void coverImageOfDraftToolIs404ForAnonymous() throws Exception {
+        String token = adminToken();
+        long id = createToolWithCoverImage(token, "cover-draft-tool", "DRAFT", "PUBLIC")
+                .get("id").asLong();
+
+        mockMvc.perform(get("/api/tools/{id}/cover-image", id))
+                .andExpect(status().isNotFound());
+    }
+
     // --- helpers ---
 
     private JsonNode createTool(String token, String slug, String status, String visibility) throws Exception {
@@ -206,6 +245,28 @@ class ToolControllerTest {
                 .andExpect(status().isCreated())
                 .andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString());
+    }
+
+    private JsonNode createToolWithCoverImage(String token, String slug, String status, String visibility)
+            throws Exception {
+        MockMultipartFile coverImage = new MockMultipartFile(
+                "coverImage", "cover.jpg", "image/jpeg", minimalJpegBytes());
+        MvcResult result = mockMvc.perform(MockMvcRequestBuilders.multipart("/api/admin/tools")
+                        .file(coverImage)
+                        .param("title", "Tool " + slug)
+                        .param("slug", slug)
+                        .param("htmlSource", SAMPLE_HTML)
+                        .param("status", status)
+                        .param("visibility", visibility)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString());
+    }
+
+    /** Minimal valid JPEG bytes (SOI + EOI markers) — same fixture as PostCoverImageTest. */
+    private byte[] minimalJpegBytes() {
+        return new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xD9};
     }
 
     private User ensureUser(String username, UserRole role, UserStatus status) {

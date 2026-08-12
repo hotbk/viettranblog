@@ -9,7 +9,9 @@ import { useSeo } from '../useSeo';
 import { getLanguagePreference, languageQueryParam, setLanguagePreference, type LanguagePreference } from '../contentLanguage';
 import { categoryColorClass } from '../categoryColor';
 
-const FILE_TYPE_LABEL: Record<string, string> = { PDF: 'PDF', TXT: 'Text' };
+const FILE_TYPE_LABEL: Record<string, string> = {
+  PDF: 'PDF', TXT: 'Text', MD: 'Markdown', SH: 'Shell script', SQL: 'SQL', DOCX: 'Word document',
+};
 
 function formatSize(bytes: number | null): string {
   if (bytes == null) return '';
@@ -208,7 +210,7 @@ function BookCard({ book }: { book: Book }) {
         <img src={book.coverImageUrl} alt={book.title} className="post-card__cover" />
       ) : (
         <div className="post-card__cover book-card__cover-placeholder" aria-hidden>
-          {book.fileType === 'PDF' ? '📕' : '📃'}
+          {book.fileType === 'PDF' ? '📕' : book.fileType === 'DOCX' ? '📘' : '📃'}
         </div>
       )}
       <div className="post-card__meta">

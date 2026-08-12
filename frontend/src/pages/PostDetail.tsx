@@ -11,11 +11,16 @@ import { isAuthenticated } from '../auth';
 import { isMemberAuthenticated } from '../memberAuth';
 import SiteNav from '../components/SiteNav';
 import RelatedPosts from '../components/RelatedPosts';
+import ReadingControls from '../components/ReadingControls';
 import PostAttachments from '../components/PostAttachments';
 import TranslationSwitcher from '../components/TranslationSwitcher';
 import { useSeo } from '../useSeo';
 import { LANGUAGE_BCP47 } from '../types';
 import { categoryColorClass } from '../categoryColor';
+import {
+  getFontSize, setFontSize, fontSizePx, stepFontSize,
+  getHideRelated, setHideRelated, type FontSize,
+} from '../readingPrefs';
 
 const DENIAL_COPY: Record<AccessDenialCode, { title: string; desc: string }> = {
   NOT_AUTHENTICATED: {
@@ -73,6 +78,24 @@ export default function PostDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [denial, setDenial] = useState<AccessDenialCode | null>(null);
+
+  // Reading preferences — per-browser, not per-post (readingPrefs.ts), so they
+  // carry over as the reader moves between articles instead of resetting each time.
+  const [fontSize, setFontSizeState] = useState<FontSize>(() => getFontSize());
+  const [hideRelated, setHideRelatedState] = useState(() => getHideRelated());
+
+  function handleFontSizeStep(direction: 'inc' | 'dec') {
+    setFontSizeState((prev) => {
+      const next = stepFontSize(prev, direction);
+      setFontSize(next);
+      return next;
+    });
+  }
+
+  function handleHideRelatedChange(hide: boolean) {
+    setHideRelatedState(hide);
+    setHideRelated(hide);
+  }
 
   useReadingProgress();
 
@@ -211,7 +234,14 @@ export default function PostDetail() {
 
           {/* Post content + sidebar */}
           {!loading && post && (
-          <div className="post-detail__layout">
+          <>
+          <ReadingControls
+            fontSize={fontSize}
+            onFontSizeStep={handleFontSizeStep}
+            hideRelated={hideRelated}
+            onHideRelatedChange={handleHideRelatedChange}
+          />
+          <div className={`post-detail__layout${hideRelated ? ' post-detail__layout--full' : ''}`}>
           <div className="post-detail__main">
             <article>
               <div className="post-detail__category-row">
@@ -276,7 +306,7 @@ export default function PostDetail() {
 
               <div className="post-detail__divider" />
 
-              <div className="post-detail__content">
+              <div className="post-detail__content" style={{ fontSize: fontSizePx(fontSize) }}>
                 <ReactMarkdown
                   rehypePlugins={[rehypeRaw]}
                   components={{
@@ -309,8 +339,9 @@ export default function PostDetail() {
             <CommentSection slug={post.slug} />
           </div>
 
-          <RelatedPosts slug={post.slug} />
+          {!hideRelated && <RelatedPosts slug={post.slug} />}
           </div>
+          </>
           )}
         </div>
       </div>

@@ -1,19 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { createTool, updateTool, fetchAdminTool, UnauthorizedError } from '../api';
 import { logout } from '../auth';
-import ThemeToggle from '../components/ThemeToggle';
+import AdminTopbar from '../components/AdminTopbar';
 import type { AdminTool, ToolStatus, ToolVisibility } from '../types';
+import { slugify } from '../slugify';
 
 const ALLOWED_COVER_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_COVER_SIZE = 2 * 1024 * 1024;
 // Mirrors ToolService.MAX_HTML_SOURCE_SIZE — checked client-side too so a
 // paste that's too big fails instantly instead of after a round trip.
 const MAX_HTML_SOURCE_SIZE = 1024 * 1024;
-
-function slugify(title: string): string {
-  return title.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-}
 
 export default function AdminToolForm() {
   const { id } = useParams<{ id: string }>();
@@ -162,21 +159,9 @@ export default function AdminToolForm() {
 
   return (
     <>
-      <header className="admin-topbar">
-        <div className="admin-topbar__inner">
-          <div className="admin-topbar__brand">
-            <span className="admin-topbar__brand-name">TECH2BLOGS</span>
-            <span className="admin-topbar__brand-sub">Admin Panel</span>
-          </div>
-          <div className="admin-topbar__actions">
-            <ThemeToggle />
-            <Link to="/admin/tools" className="admin-topbar__view-site">&larr; Tools</Link>
-            <Link to="/" className="admin-topbar__view-site">View site &rarr;</Link>
-          </div>
-        </div>
-      </header>
+      <AdminTopbar back={{ to: '/admin/tools', label: '← Tools' }} />
 
-      <div className="admin-posts-page">
+      <div className="admin-posts-page admin-posts-page--wide">
         <div className="post-form-panel">
           <div className="post-form-panel__header">
             <h2 className="post-form-panel__title">{isEditMode ? 'Edit Tool' : 'New Tool'}</h2>

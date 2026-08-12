@@ -33,6 +33,10 @@ const DENIAL_COPY: Record<AccessDenialCode, { title: string; desc: string }> = {
   },
 };
 
+const FILE_TYPE_LABEL: Record<Book['fileType'], string> = {
+  PDF: 'PDF', TXT: 'Text', MD: 'Markdown', SH: 'Shell script', SQL: 'SQL', DOCX: 'Word document',
+};
+
 function formatSize(bytes: number | null): string {
   if (bytes == null) return '';
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -143,7 +147,7 @@ export default function BookDetailPage() {
 
               <div className="post-detail__category-row">
                 {book.category && <span className={`post-detail__category ${categoryColorClass(book.category)}`}>{book.category}</span>}
-                <span className="post-detail__date">{book.fileType === 'PDF' ? 'PDF' : 'Text'}</span>
+                <span className="post-detail__date">{FILE_TYPE_LABEL[book.fileType]}</span>
                 {book.fileSize != null && (
                   <span className="post-detail__date">{formatSize(book.fileSize)}</span>
                 )}

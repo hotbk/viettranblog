@@ -76,7 +76,7 @@ export default function ToolDetail() {
     <>
       <SiteNav active="tools" />
 
-      <div className="post-detail-page">
+      <div className="post-detail-page tool-detail-page">
         <div className="container">
           <Link to="/tools" className="back-link">Back to tools</Link>
 

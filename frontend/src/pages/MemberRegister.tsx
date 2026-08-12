@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { registerMember } from '../api';
-import NavBrand from '../components/NavBrand';
-import NavUser from '../components/NavUser';
+import MemberNav from '../components/MemberNav';
 
 export default function MemberRegister() {
   const [username, setUsername] = useState('');
@@ -37,15 +36,7 @@ export default function MemberRegister() {
 
   return (
     <div className="admin-login-page">
-      <nav className="site-nav" style={{ position: 'static', marginBottom: 0 }}>
-        <div className="site-nav__inner">
-          <NavBrand />
-          <div className="site-nav__links">
-            <Link to="/" className="site-nav__link">Home</Link>
-            <NavUser />
-          </div>
-        </div>
-      </nav>
+      <MemberNav guest />
 
       <div className="admin-login-wrap">
         <div className="admin-login-card">

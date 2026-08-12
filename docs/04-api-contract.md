@@ -317,7 +317,7 @@ No backend endpoint — the editor parses a pasted YouTube URL (watch/shorts/
 </div>
 ```
 
-## 10. Post Attachments (PDF/DOC/DOCX/TXT/MD/ZIP)
+## 10. Post Attachments (PDF/DOC/DOCX/TXT/MD/SH/SQL/ZIP)
 
 Downloadable/viewable files attached to a post (distinct from inline content
 images/videos pasted into Markdown — attachments are a structural list on the
@@ -339,6 +339,8 @@ Allowed types, by filename extension — **not** the client-supplied
 | `.docx` | `DOCX` | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` |
 | `.txt` | `TXT` | `text/plain` |
 | `.md` | `MD` | `text/markdown` |
+| `.sh` | `SH` | `text/plain` |
+| `.sql` | `SQL` | `text/plain` |
 | `.zip` | `ZIP` | `application/zip` |
 
 Max 20 MB per file. Stored as the `post_attachments.data` bytea column.
@@ -438,7 +440,7 @@ content, same shape as the GET responses above.
 
 ## 12. Book Library (Phase 1 — see docs/08-book-library-module.md)
 
-Books are a separate content type from posts — PDF or TXT files, read online
+Books are a separate content type from posts — PDF, TXT, MD, SH, SQL, or DOCX files, read online
 via a dedicated reader (`/library/:slug/read`), with the same PUBLIC/PRIVATE
 access-control shape already used for posts (access groups + direct per-user
 grants + reason-coded 401/403). Full design/rationale:
@@ -534,7 +536,7 @@ EDITOR access, same convention as `/api/admin/images`/`/videos`/post attachments
 |---|---|
 | `GET /api/admin/books` | All books incl. `DRAFT`/`PRIVATE`. |
 | `GET /api/admin/books/{id}` | Detail, with `accessGroupCount`. |
-| `POST /api/admin/books` | `multipart/form-data`: `title`, `slug`, `author?`, `description?`, `category?`, `status`, `visibility`, `metadataVisibility?`, `downloadable`, `file` (required, PDF or TXT, ≤50MB), `coverImage?`. → `201`. |
+| `POST /api/admin/books` | `multipart/form-data`: `title`, `slug`, `author?`, `description?`, `category?`, `status`, `visibility`, `metadataVisibility?`, `downloadable`, `file` (required, PDF/TXT/MD/SH/SQL/DOCX, ≤50MB — text formats use a plaintext content check; DOCX requires an OOXML ZIP signature; extension-detected MIME types are normalized), `coverImage?`. → `201`. |
 | `PUT /api/admin/books/{id}` | Same fields; `file` optional (present ⇒ replace bytes **and clears any saved reading progress for the book** — an old page number is meaningless against a new file); `removeCoverImage` boolean. |
 | `PUT /api/admin/books/{id}/status` | `?status=DRAFT\|PUBLISHED`. |
 | `DELETE /api/admin/books/{id}` | `204`. Cleans up `book_reading_progress`, `book_access_groups`, `book_user_permissions`, `book_files` before deleting the book row. |

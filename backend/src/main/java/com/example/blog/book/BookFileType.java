@@ -1,7 +1,14 @@
 package com.example.blog.book;
 
-/** The 2 file formats this module accepts — no DOC/DOCX/EPUB at MVP (see docs/08-book-library-module.md). */
+/**
+ * The file formats this module accepts. MD, SH and SQL use the plaintext
+ * reader; DOCX is rendered in the browser and is never executed by the server.
+ */
 public enum BookFileType {
     PDF,
-    TXT
+    TXT,
+    MD,
+    SH,
+    SQL,
+    DOCX
 }

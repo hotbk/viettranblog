@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { fetchAdminSeriesList, deleteSeries, UnauthorizedError } from '../api';
 import { logout } from '../auth';
-import ThemeToggle from '../components/ThemeToggle';
+import AdminTopbar from '../components/AdminTopbar';
 import type { SeriesSummary } from '../types';
 
 export default function AdminSeries() {
@@ -37,30 +37,10 @@ export default function AdminSeries() {
     }
   }
 
-  function handleLogout() { logout(); navigate('/admin/login'); }
 
   return (
     <>
-      <header className="admin-topbar">
-        <div className="admin-topbar__inner">
-          <div className="admin-topbar__brand">
-            <span className="admin-topbar__brand-name">TECH2BLOGS</span>
-            <span className="admin-topbar__brand-sub">Admin Panel</span>
-          </div>
-          <div className="admin-topbar__actions">
-            <ThemeToggle />
-            <Link to="/admin/posts" className="admin-topbar__view-site">Posts</Link>
-            <Link to="/admin/exams" className="admin-topbar__view-site">Exams</Link>
-            <Link to="/admin/attempts" className="admin-topbar__view-site">Attempts</Link>
-            <Link to="/admin/users" className="admin-topbar__view-site">Users</Link>
-            <Link to="/admin/about" className="admin-topbar__view-site">About</Link>
-            <Link to="/admin/books" className="admin-topbar__view-site">Books</Link>
-            <Link to="/admin/tools" className="admin-topbar__view-site">Tools</Link>
-            <Link to="/" className="admin-topbar__view-site">View site &rarr;</Link>
-            <button className="btn--topbar-logout" onClick={handleLogout}>Sign out</button>
-          </div>
-        </div>
-      </header>
+      <AdminTopbar active="series" />
 
       <div className="admin-posts-page">
         <div className="admin-page-header">

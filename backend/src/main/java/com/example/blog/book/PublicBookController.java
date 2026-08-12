@@ -5,7 +5,9 @@ import com.example.blog.common.ContentLanguage;
 import com.example.blog.common.NotFoundException;
 import com.example.blog.user.User;
 import jakarta.validation.Valid;
+import java.time.Duration;
 import java.util.List;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -23,6 +25,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class PublicBookController {
+
+    /** Not a Spring-provided HttpHeaders constant — this is a Spring Security header name. */
+    private static final String X_CONTENT_TYPE_OPTIONS = "X-Content-Type-Options";
 
     private final BookService bookService;
     private final BookProgressService bookProgressService;
@@ -53,7 +58,13 @@ public class PublicBookController {
     @GetMapping("/api/books/{id}/cover-image")
     public ResponseEntity<byte[]> getCoverImage(@PathVariable Long id) {
         Book book = bookService.getCoverImageBook(id);
+        // Same reasoning as PostController.getCoverImage: only PUBLIC is safe for a shared
+        // cache, since bookAccessService.canRead was only checked for *this* caller.
+        CacheControl cacheControl = book.getVisibility() == BookVisibility.PUBLIC
+                ? CacheControl.maxAge(Duration.ofMinutes(10)).cachePublic()
+                : CacheControl.noStore();
         return ResponseEntity.ok()
+                .cacheControl(cacheControl)
                 .contentType(MediaType.parseMediaType(book.getCoverImageContentType()))
                 .body(book.getCoverImageData());
     }
@@ -66,6 +77,12 @@ public class PublicBookController {
                 .contentType(MediaType.parseMediaType(book.getContentType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         ContentDisposition.inline().filename(book.getOriginalFilename()).build().toString())
+                // Belt-and-suspenders alongside Spring Security's own default
+                // nosniff header (SecurityConfig doesn't disable it): SH/SQL
+                // uploads are served as text/plain (BookService.applyFile) and
+                // must never be MIME-sniffed into anything a browser would
+                // treat as executable/renderable content.
+                .header(X_CONTENT_TYPE_OPTIONS, "nosniff")
                 .body(file.getData());
     }
 
@@ -77,6 +94,7 @@ public class PublicBookController {
                 .contentType(MediaType.parseMediaType(book.getContentType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         ContentDisposition.attachment().filename(book.getOriginalFilename()).build().toString())
+                .header(X_CONTENT_TYPE_OPTIONS, "nosniff")
                 .body(file.getData());
     }
 

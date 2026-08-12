@@ -5,20 +5,10 @@ import {
   setSeriesPosts, UnauthorizedError,
 } from '../api';
 import { logout } from '../auth';
-import ThemeToggle from '../components/ThemeToggle';
+import AdminTopbar from '../components/AdminTopbar';
 import type { SeriesDetail, SeriesPostItem, BlogPost } from '../types';
 import type { SeriesRequest } from '../api';
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-');
-}
+import { slugify } from '../slugify';
 
 export default function AdminSeriesForm() {
   const navigate = useNavigate();
@@ -161,23 +151,7 @@ export default function AdminSeriesForm() {
 
   return (
     <>
-      <header className="admin-topbar">
-        <div className="admin-topbar__inner">
-          <div className="admin-topbar__brand">
-            <span className="admin-topbar__brand-name">TECH2BLOGS</span>
-            <span className="admin-topbar__brand-sub">Admin Panel</span>
-          </div>
-          <div className="admin-topbar__actions">
-            <ThemeToggle />
-            <Link to="/admin/posts" className="admin-topbar__view-site">Posts</Link>
-            <Link to="/admin/exams" className="admin-topbar__view-site">Exams</Link>
-            <Link to="/admin/attempts" className="admin-topbar__view-site">Attempts</Link>
-            <Link to="/admin/series" className="admin-topbar__view-site">← Series</Link>
-            <Link to="/" className="admin-topbar__view-site">View site &rarr;</Link>
-            <button className="btn--topbar-logout" onClick={() => { logout(); navigate('/admin/login'); }}>Sign out</button>
-          </div>
-        </div>
-      </header>
+      <AdminTopbar back={{ to: '/admin/series', label: '← Series' }} />
 
       <div className="admin-posts-page">
         <div className="admin-page-header">

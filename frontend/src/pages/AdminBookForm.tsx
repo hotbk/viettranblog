@@ -7,22 +7,28 @@ import {
   linkBookTranslation, markBookTranslationReviewed,
 } from '../api';
 import { logout } from '../auth';
-import ThemeToggle from '../components/ThemeToggle';
+import AdminTopbar from '../components/AdminTopbar';
 import TranslationsPanel from '../components/TranslationsPanel';
-import { Link } from 'react-router-dom';
 import type { Book, BookFileType, BookVisibility, AccessGroup, UserBrief, ContentLanguage } from '../types';
+import { slugify } from '../slugify';
 
 const ALLOWED_BOOK_TYPES: Record<string, BookFileType> = {
   'application/pdf': 'PDF',
   'text/plain': 'TXT',
 };
+// .sh/.sql have no standardized browser-assigned MIME type (varies by OS/
+// browser — often '' or application/octet-stream), so unlike the map above
+// they're recognized by extension. The backend re-validates by content
+// regardless (see BookService.applyFile) — this is a client-side UX check only.
+const ALLOWED_BOOK_EXTENSIONS: Record<string, BookFileType> = {
+  md: 'MD',
+  sh: 'SH',
+  sql: 'SQL',
+  docx: 'DOCX',
+};
 const MAX_BOOK_SIZE = 50 * 1024 * 1024;
 const ALLOWED_COVER_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_COVER_SIZE = 2 * 1024 * 1024;
-
-function slugify(title: string): string {
-  return title.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-}
 
 export default function AdminBookForm() {
   const { id } = useParams<{ id: string }>();
@@ -113,8 +119,9 @@ export default function AdminBookForm() {
     const file = e.target.files?.[0];
     if (!file) return;
     setBookFileError(null);
-    if (!(file.type in ALLOWED_BOOK_TYPES)) {
-      setBookFileError('Only PDF or plain text (.txt) files are accepted.');
+    const extension = file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase();
+    if (!(file.type in ALLOWED_BOOK_TYPES) && !(extension in ALLOWED_BOOK_EXTENSIONS)) {
+      setBookFileError('Only PDF, TXT, MD, SH, SQL, or DOCX files are accepted.');
       e.target.value = '';
       return;
     }
@@ -159,7 +166,7 @@ export default function AdminBookForm() {
       return;
     }
     if (!isEditMode && !bookFile) {
-      setError('A book file (PDF or TXT) is required.');
+      setError('A book file (PDF, TXT, MD, SH, SQL, or DOCX) is required.');
       return;
     }
 
@@ -204,19 +211,7 @@ export default function AdminBookForm() {
 
   return (
     <>
-      <header className="admin-topbar">
-        <div className="admin-topbar__inner">
-          <div className="admin-topbar__brand">
-            <span className="admin-topbar__brand-name">TECH2BLOGS</span>
-            <span className="admin-topbar__brand-sub">Admin Panel</span>
-          </div>
-          <div className="admin-topbar__actions">
-            <ThemeToggle />
-            <Link to="/admin/books" className="admin-topbar__view-site">&larr; Books</Link>
-            <Link to="/" className="admin-topbar__view-site">View site &rarr;</Link>
-          </div>
-        </div>
-      </header>
+      <AdminTopbar back={{ to: '/admin/books', label: '← Books' }} />
 
       <div className="admin-posts-page">
         <div className="post-form-panel">
@@ -297,7 +292,7 @@ export default function AdminBookForm() {
                 )}
                 <input
                   ref={bookFileInputRef} type="file"
-                  accept=".pdf,.txt,application/pdf,text/plain"
+                  accept=".pdf,.txt,.md,.sh,.sql,.docx,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   style={{ display: 'none' }} onChange={handleBookFileChange}
                 />
                 <button type="button" className="btn btn--ghost btn--sm" onClick={() => bookFileInputRef.current?.click()}>
@@ -305,7 +300,7 @@ export default function AdminBookForm() {
                 </button>
                 {bookFileError && <p style={{ marginTop: 8, fontSize: 13, color: 'var(--color-error)' }}>{bookFileError}</p>}
                 <p style={{ marginTop: 6, fontSize: 12, color: 'var(--color-text-muted)' }}>
-                  PDF or TXT — max 50 MB. {isEditMode && 'Replacing the file resets any saved reading progress for this book.'}
+                  PDF, TXT, MD, SH, SQL, or DOCX — max 50 MB. {isEditMode && 'Replacing the file resets any saved reading progress for this book.'}
                 </p>
               </div>
 

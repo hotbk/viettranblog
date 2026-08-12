@@ -23,6 +23,7 @@ import com.example.blog.user.UserRole;
 import com.example.blog.user.UserStatus;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -106,6 +107,42 @@ class PostAttachmentControllerTest {
         mockMvc.perform(get("/api/posts/pa-md-post"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.attachments[0].attachmentType").value("MD"));
+    }
+
+    @Test
+    void uploadShellAndSqlSucceedsAndServesAsPlainText() throws Exception {
+        String token = adminToken();
+        long postId = createPost(token, "pa-script-post");
+
+        for (MockMultipartFile file : List.of(
+                new MockMultipartFile("file", "deploy.sh", "application/octet-stream", "#!/bin/sh\necho ok\n".getBytes()),
+                new MockMultipartFile("file", "schema.sql", "application/x-sql", "CREATE TABLE demo(id INT);\n".getBytes()))) {
+            MvcResult result = mockMvc.perform(multipart("/api/admin/posts/{id}/attachments", postId)
+                            .file(file)
+                            .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isCreated())
+                    .andReturn();
+            JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
+            String expectedType = file.getOriginalFilename().endsWith(".sh") ? "SH" : "SQL";
+            org.assertj.core.api.Assertions.assertThat(response.get("attachmentType").asText()).isEqualTo(expectedType);
+
+            mockMvc.perform(get("/api/posts/{id}/attachments/{attachmentId}", postId, response.get("id").asLong()))
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentType("text/plain"));
+        }
+    }
+
+    @Test
+    void uploadRejectsBinaryContentDisguisedAsShellScript() throws Exception {
+        String token = adminToken();
+        long postId = createPost(token, "pa-binary-script-post");
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "malware.sh", "application/octet-stream", new byte[]{0x7f, 'E', 'L', 'F', 0, 1});
+
+        mockMvc.perform(multipart("/api/admin/posts/{id}/attachments", postId)
+                        .file(file)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

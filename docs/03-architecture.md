@@ -255,7 +255,7 @@ upload directory.
 |---|---|---|
 | Post cover image | `posts.cover_image_data` (inline) | 2 MB |
 | Inline content image | `content_images.data` | 5 MB |
-| Post attachment (PDF/DOC/DOCX/TXT/MD/ZIP) | `post_attachments.data`, FK to `posts` | 20 MB |
+| Post attachment (PDF/DOC/DOCX/TXT/MD/SH/SQL/ZIP) | `post_attachments.data`, FK to `posts` | 20 MB |
 | Transcoded video | `content_videos.data` | 200 MB raw upload / 10 min source |
 | Book cover image | `books.cover_image_data` (inline) | 2 MB |
 | Book file (PDF/TXT) | `book_files.data` (**separate table**) | 50 MB |

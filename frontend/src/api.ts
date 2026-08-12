@@ -734,7 +734,7 @@ export async function uploadContentVideo(file: File): Promise<VideoUploadResult>
   return res.json();
 }
 
-// ── Post attachments (PDF/DOC/DOCX/TXT/MD/ZIP) ─────────────────────────────────
+// ── Post attachments (PDF/DOC/DOCX/TXT/MD/SH/SQL/ZIP) ──────────────────────────
 
 export async function uploadPostAttachment(postId: number, file: File): Promise<PostAttachment> {
   const form = new FormData();

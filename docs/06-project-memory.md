@@ -2334,3 +2334,154 @@ Known gaps / follow-ups:
 - No frontend test suite exists yet (project-wide, pre-existing) — the
   sandboxed-iframe behavior has only the manual headless-browser
   verification from this session, not a checked-in regression test.
+
+## 2026-08-11 — Tools module smoke test; layout widening; post reading
+controls; public HTTP caching + a Tool cover-image access-control fix
+
+Summary: a follow-up session on the Tools module shipped above, plus a
+small unrelated PostDetail feature and a caching pass across public
+GET endpoints.
+
+1. **Smoke test of the Tools module.** Live `ToolControllerTest` run
+   (8/8) plus a real create→list→raw→delete round trip via `curl` against
+   a running `dev`-profile backend. Found the dev backend process
+   (`mvn spring-boot:run` on `:19080`) had been started *before* the
+   Tools feature commit — stale JVM, DB still on Flyway v4, `/api/tools`
+   401'ing (old `SecurityConfig` without the tools `permitAll` matcher).
+   Restarted it (user confirmed first) — Flyway auto-applied
+   `V5__add_tools.sql`, endpoints came up correctly. Root cause was
+   environmental, not a code bug.
+2. **Layout widening**, three separate asks in sequence:
+   - `AdminToolForm` (`/admin/tools/new|:id/edit`): new opt-in
+     `.admin-posts-page--wide` modifier (1600px vs the shared 1200px) —
+     scoped so no other admin page sharing `.admin-posts-page` is
+     affected.
+   - `/tools` (`ToolsList`): the existing-but-unused `.container--wide`
+     utility (1200px vs 960px) — just needed the class attached.
+   - `/tools/:slug` (`ToolDetail`): `.container--wide` alone had *no*
+     effect here — `.post-detail-page .container` (1100px) and
+     `.post-detail__narrow` (760px), both shared with
+     Post/Book/About-detail pages, out-specificity it. Added a
+     `.tool-detail-page` modifier class instead, scoped rules for both,
+     1400px — doesn't touch the other three pages using the same shared
+     shell.
+3. **PostDetail reading controls** (new, user-requested): `A-`/`A+` font
+   size stepper (4 steps, 15–21px) and a "Hide related posts" toggle that
+   drops `RelatedPosts` and widens `.post-detail__main` to 900px (up from
+   760px) via a `.post-detail__layout--full` modifier. Both preferences
+   persist in `localStorage` per-browser (not per-post), same pattern as
+   `theme.ts` — new `readingPrefs.ts` + `ReadingControls.tsx`.
+4. **Caching**: added explicit `Cache-Control` to 5 previously-uncached
+   public GET endpoints (Spring Security's default `no-cache, no-store`
+   header was blanket-applying to everything, including immutable
+   images) — `PostController`/`PublicBookController` cover-image
+   (`public max-age=10m` if `PUBLIC` visibility, `noStore` if `PRIVATE`,
+   since a shared/CDN cache can't repeat the per-caller
+   `postAccessService.canRead`/`bookAccessService.canRead` check),
+   `ContentImageController` (`public max-age=1y immutable` — always
+   unauthenticated, no update endpoint, fresh UUID per upload),
+   `PublicToolController.raw` (`public max-age=10m`, safe unconditionally
+   since `getRawHtml` already filters PUBLISHED+PUBLIC), and
+   `SitemapController` (`public max-age=1h`).
+5. **Fixed a real gap the caching pass surfaced**: `ToolService.`
+   `getCoverImageTool` had no status/visibility check at all — any
+   numeric id's cover image was servable regardless of DRAFT/PRIVATE,
+   unlike `getRawHtml`'s already-correct PUBLISHED+PUBLIC filter and
+   unlike Post/Book's cover-image reads. Fixed to match: PUBLISHED+PUBLIC
+   for everyone, plus a `STAFF_ROLES` (ADMIN/EDITOR) bypass mirroring
+   `PostAccessService`/`BookAccessService`'s `BYPASS_ROLES` pattern (new
+   `isStaff()` helper in `ToolService`, reads `SecurityContextHolder`
+   directly per this class's existing "no group model, just a role
+   check" javadoc). Noted but did not additionally fix: the staff bypass
+   can't actually help the admin-panel `<img src>` cover preview for a
+   DRAFT/PRIVATE tool, because a plain `<img>` tag never carries the
+   `Authorization` header this app's JWT auth requires — same
+   pre-existing, non-regressing limitation Post/Book's cover-image
+   endpoints already have.
+
+Explicit architecture decision re-confirmed, not touched: no cache
+*tier* (Redis/Varnish/CDN) — `docs/03-architecture.md` §1 rules that out
+deliberately for this MVP's scale. Everything above is response-header
+level only, no new infra/dependency.
+
+Files touched: `backend/.../post/PostController.java`,
+`backend/.../book/PublicBookController.java`,
+`backend/.../image/ContentImageController.java`,
+`backend/.../tool/{PublicToolController,ToolService}.java`,
+`backend/.../seo/SitemapController.java`;
+`backend/src/test/java/.../tool/ToolControllerTest.java` (+3 cover-image
+tests); `frontend/src/pages/{AdminToolForm,ToolsList,ToolDetail,
+PostDetail}.tsx`, `frontend/src/{readingPrefs.ts,
+components/ReadingControls.tsx}` (new), `frontend/src/styles.css`.
+
+Checks run: `mvn test` — 156/156 (153 pre-existing + 3 new). `npm run
+typecheck && npm run lint && npm run build` — all clean. Live `curl`
+verification of `Cache-Control` headers against a restarted dev backend
+(sitemap.xml, tool raw) — both matched the intended directive.
+
+Known gaps / follow-ups:
+- Admin cover-image preview for a DRAFT/PRIVATE Tool/Post/Book still
+  won't render in the admin edit form (pre-existing across all three,
+  not just Tool — see point 5 above). Would need either a separate
+  authenticated admin image endpoint or a blob-fetch-based `<img>`
+  instead of a plain `src=`.
+
+### 2026-08-11
+
+Fixed three consistency bugs flagged in review: navbar drift (admin panel
++ member area), a mis-transliterating Vietnamese slug generator, and
+confirmed the "Exams" → `/member/login` nav link is intentional.
+
+1. **Admin panel topbar duplicated 17x, all diverged.** Every
+   `frontend/src/pages/Admin*.tsx` hand-copied the `<header
+   className="admin-topbar">` markup; each list page showed a different
+   subset/order of links (some missing Attempts, Access Groups, Access
+   Requests, or Audit Logs), and form/detail pages inconsistently mixed
+   a "back to list" link with random extra links (`AdminSeriesForm` kept
+   Posts/Exams/Attempts links alongside its "← Series" back-link, unlike
+   every sibling form page). Extracted `frontend/src/components/
+   AdminTopbar.tsx`: `active="<page>"` renders the full canonical link
+   set (Posts, Series, Exams, Attempts, Books, Tools, Users, Access
+   Groups, Access Requests, Audit Logs, About) for list pages;
+   `back={{ to, label }}` renders a single back-link for the 6 edit/detail
+   forms (Book/Exam/Series/Tool forms, User/Attempt detail).
+   `AdminSeriesForm` now matches its sibling forms (back-link only).
+2. **Member-area nav duplicated 6x, all diverged.** `MemberExams`,
+   `MemberHistory`, `MemberAttemptResult`, `MemberExamTake`,
+   `MemberLogin`, `MemberRegister` each hand-copied `<nav
+   className="site-nav">`; `MemberRegister` was even missing
+   `ThemeToggle` that every other page has. Extracted `frontend/src/
+   components/MemberNav.tsx`, mirroring `SiteNav.tsx`'s existing
+   rationale for the public pages: `active="exams"|"history"` for the
+   list pages, `back={{ to, label }}` for the focused exam-taking/result
+   screens, `guest` (Home-only, no Sign out, static position) for
+   login/register.
+3. **Vietnamese slug generator dropped whole letters, not just
+   accents.** `AdminBookForm`, `AdminToolForm`, `AdminAccessGroups`, and
+   `PostForm` each had their own `slugify()` that stripped
+   `[^a-z0-9-]` directly without Unicode-decomposing first, so e.g.
+   "mới" → "mi" (the "ơ" was deleted whole) instead of "moi".
+   `AdminSeriesForm`'s copy already did `.normalize('NFD')` +
+   combining-mark strip + `đ→d` correctly. Extracted that correct version
+   to `frontend/src/slugify.ts` and pointed all 5 call sites at it.
+4. **Confirmed with the user, not changed:** `SiteNav`'s signed-out
+   "Exams" link intentionally points to `/member/login` (not
+   `/member/exams`) — consistent with the Sign-in links used elsewhere
+   (Book/Post detail, home exams preview) rather than relying on
+   `RequireMember`'s redirect.
+
+Files touched: `frontend/src/components/{AdminTopbar,MemberNav}.tsx`
+(new), `frontend/src/slugify.ts` (new); 17 `Admin*.tsx` pages; 6
+`Member*.tsx` pages; `AdminAccessGroups.tsx`, `PostForm.tsx`
+(slugify dedup only, no nav change for the latter).
+
+Checks run: `npm run typecheck && npm run lint && npm run build` — all
+clean (0 errors; 2 pre-existing unrelated warnings in
+`HighlightPopup.tsx`). No backend changes, so `mvn test` not re-run.
+
+Known gaps / follow-ups:
+- `.site-nav__link--active` / `.admin-topbar__view-site--active` are not
+  styled in `styles.css` (pre-existing — `SiteNav.tsx` already applied
+  the same unstyled class before this change). Active-link highlighting
+  is a no-op visually until that CSS is added; out of scope for this
+  consistency fix.

@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { fetchAdminPosts, deletePost, updatePostStatus, UnauthorizedError } from '../api';
 import { logout } from '../auth';
-import ThemeToggle from '../components/ThemeToggle';
+import AdminTopbar from '../components/AdminTopbar';
 import type { BlogPost, ContentLanguage } from '../types';
 import { LANGUAGE_LABEL } from '../types';
 import PostForm from './PostForm';
@@ -124,11 +124,6 @@ export default function AdminPosts() {
     setRefreshKey((k) => k + 1);
   }
 
-  function handleLogout() {
-    logout();
-    navigate('/admin/login');
-  }
-
   async function handleDelete(post: BlogPost) {
     const confirmed = window.confirm(`Delete "${post.title}"? This cannot be undone.`);
     if (!confirmed) return;
@@ -209,31 +204,7 @@ export default function AdminPosts() {
 
   return (
     <>
-      {/* ── Admin Topbar ──────────────────────── */}
-      <header className="admin-topbar">
-        <div className="admin-topbar__inner">
-          <div className="admin-topbar__brand">
-            <span className="admin-topbar__brand-name">TECH2BLOGS</span>
-            <span className="admin-topbar__brand-sub">Admin Panel</span>
-          </div>
-          <div className="admin-topbar__actions">
-            <ThemeToggle />
-            <Link to="/admin/exams" className="admin-topbar__view-site">Exams</Link>
-            <Link to="/admin/attempts" className="admin-topbar__view-site">Attempts</Link>
-            <Link to="/admin/series" className="admin-topbar__view-site">Series</Link>
-            <Link to="/admin/users" className="admin-topbar__view-site">Users</Link>
-            <Link to="/admin/access-groups" className="admin-topbar__view-site">Access Groups</Link>
-            <Link to="/admin/access-requests" className="admin-topbar__view-site">Access Requests</Link>
-            <Link to="/admin/about" className="admin-topbar__view-site">About</Link>
-            <Link to="/admin/books" className="admin-topbar__view-site">Books</Link>
-            <Link to="/admin/tools" className="admin-topbar__view-site">Tools</Link>
-            <Link to="/" className="admin-topbar__view-site">View site &rarr;</Link>
-            <button className="btn--topbar-logout" onClick={handleLogout}>
-              Sign out
-            </button>
-          </div>
-        </div>
-      </header>
+      <AdminTopbar active="posts" />
 
       {/* ── Page content ──────────────────────── */}
       <div className="admin-posts-page">

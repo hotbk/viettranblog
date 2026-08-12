@@ -1,5 +1,9 @@
 # Hướng dẫn triển khai và vận hành — VietTran Blog
 
+> Cần cài đặt production trên một máy Ubuntu mới? Dùng runbook từng bước tại
+> [docs/11-ubuntu-production-deployment.md](11-ubuntu-production-deployment.md).
+> Tài liệu này giữ vai trò tham chiếu development và vận hành tổng quát.
+
 ## Mục lục
 
 1. [Yêu cầu hệ thống](#1-yêu-cầu-hệ-thống)

@@ -1,9 +1,14 @@
 package com.example.blog.tool;
 
 import com.example.blog.common.NotFoundException;
+import com.example.blog.user.UserRepository;
+import com.example.blog.user.UserRole;
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,13 +33,19 @@ public class ToolService {
 
     private static final long MAX_COVER_IMAGE_SIZE = 2L * 1024 * 1024; // 2 MB
     private static final Set<String> ALLOWED_COVER_TYPES = Set.of("image/jpeg", "image/png", "image/webp");
+    // "Staff only" per ToolVisibility's javadoc — the PRIVATE bypass, checked directly
+    // against the caller's role rather than through a group/grant model.
+    private static final Set<UserRole> STAFF_ROLES = Set.of(UserRole.ADMIN, UserRole.EDITOR);
 
     private final ToolRepository toolRepository;
     private final ToolSourceRepository toolSourceRepository;
+    private final UserRepository userRepository;
 
-    public ToolService(ToolRepository toolRepository, ToolSourceRepository toolSourceRepository) {
+    public ToolService(ToolRepository toolRepository, ToolSourceRepository toolSourceRepository,
+                        UserRepository userRepository) {
         this.toolRepository = toolRepository;
         this.toolSourceRepository = toolSourceRepository;
+        this.userRepository = userRepository;
     }
 
     /**
@@ -82,6 +93,13 @@ public class ToolService {
                 .orElseThrow(() -> new NotFoundException("TOOL_NOT_FOUND", "Tool not found"));
     }
 
+    /**
+     * Same PUBLISHED+PUBLIC rule as {@link #getRawHtml}, except staff (ADMIN/EDITOR) bypass it —
+     * this URL is also what {@code AdminToolResponse.coverImageUrl} points admins at while
+     * editing a DRAFT/PRIVATE tool (PublicToolController.getCoverImage; there's no separate
+     * gated admin image endpoint). Was previously unchecked entirely (any numeric id, no
+     * visibility filter at all) until the caching pass on that controller surfaced it.
+     */
     @Transactional(readOnly = true)
     public Tool getCoverImageTool(Long id) {
         Tool tool = toolRepository.findById(id)
@@ -89,7 +107,31 @@ public class ToolService {
         if (tool.getCoverImageData() == null) {
             throw new NotFoundException("TOOL_NOT_FOUND", "Tool not found");
         }
+        boolean publiclyVisible = tool.getStatus() == ToolStatus.PUBLISHED && tool.getVisibility() == ToolVisibility.PUBLIC;
+        if (!publiclyVisible && !isStaff()) {
+            // Same oracle-avoidance convention as getRawHtml/PostAccessService: 404, not 403.
+            throw new NotFoundException("TOOL_NOT_FOUND", "Tool not found");
+        }
         return tool;
+    }
+
+    /**
+     * Mirrors PostAccessService/BookAccessService's BYPASS_ROLES check, but standalone (per this
+     * class's javadoc) since there's no group/grant model here to route through. Note this only
+     * ever resolves true for a request that actually carried a valid Authorization header — a
+     * plain {@code <img src>} load (which is how the admin cover-image preview above works) never
+     * does, so staff still won't see a DRAFT/PRIVATE tool's cover thumbnail in the admin form.
+     * That's an existing, non-regressing limitation shared with Post/Book's cover-image endpoints,
+     * not something introduced here.
+     */
+    private boolean isStaff() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
+            return false;
+        }
+        return userRepository.findByUsername(auth.getName())
+                .map(u -> STAFF_ROLES.contains(u.getRole()))
+                .orElse(false);
     }
 
     /** Admin edit-form load — the one place htmlSource is ever sent as JSON. */

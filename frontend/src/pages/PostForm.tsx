@@ -13,6 +13,7 @@ import {
 } from '../api';
 import type { PostRequest } from '../api';
 import { logout } from '../auth';
+import { slugify } from '../slugify';
 import ImageUploadButton from '../components/ImageUploadButton';
 import VideoUploadButton from '../components/VideoUploadButton';
 import YoutubeEmbedButton from '../components/YoutubeEmbedButton';
@@ -48,14 +49,6 @@ interface PostFormProps {
   existingSlugs?: string[];
   onSave: (post: BlogPost) => void;
   onCancel: () => void;
-}
-
-function slugify(title: string): string {
-  return title
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '');
 }
 
 export default function PostForm({ initial, existingSlugs, onSave, onCancel }: PostFormProps) {

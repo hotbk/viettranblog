@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { fetchAdminBooks, deleteBook, updateBookStatus, UnauthorizedError } from '../api';
 import { logout } from '../auth';
-import ThemeToggle from '../components/ThemeToggle';
+import AdminTopbar from '../components/AdminTopbar';
 import type { Book, ContentLanguage } from '../types';
 import { LANGUAGE_LABEL } from '../types';
 
@@ -42,7 +42,6 @@ export default function AdminBooks() {
     return () => { cancelled = true; };
   }, [navigate]);
 
-  function handleLogout() { logout(); navigate('/admin/login'); }
 
   async function handleDelete(book: Book) {
     if (!window.confirm(`Delete "${book.title}"? This cannot be undone.`)) return;
@@ -76,24 +75,7 @@ export default function AdminBooks() {
 
   return (
     <>
-      <header className="admin-topbar">
-        <div className="admin-topbar__inner">
-          <div className="admin-topbar__brand">
-            <span className="admin-topbar__brand-name">TECH2BLOGS</span>
-            <span className="admin-topbar__brand-sub">Admin Panel</span>
-          </div>
-          <div className="admin-topbar__actions">
-            <ThemeToggle />
-            <Link to="/admin/posts" className="admin-topbar__view-site">Posts</Link>
-            <Link to="/admin/series" className="admin-topbar__view-site">Series</Link>
-            <Link to="/admin/exams" className="admin-topbar__view-site">Exams</Link>
-            <Link to="/admin/users" className="admin-topbar__view-site">Users</Link>
-            <Link to="/admin/about" className="admin-topbar__view-site">About</Link>
-            <Link to="/" className="admin-topbar__view-site">View site &rarr;</Link>
-            <button className="btn--topbar-logout" onClick={handleLogout}>Sign out</button>
-          </div>
-        </div>
-      </header>
+      <AdminTopbar active="books" />
 
       <div className="admin-posts-page">
         <div className="admin-page-header">

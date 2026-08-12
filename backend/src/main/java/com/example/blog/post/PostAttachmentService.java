@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Post attachment uploads/downloads (PDF/DOC/DOCX/TXT/MD/ZIP). Kept separate
+ * Post attachment uploads/downloads (PDF/DOC/DOCX/TXT/MD/SH/SQL/ZIP). Kept separate
  * from {@link PostService} — that class already assembles the read-side
  * {@code attachments} list on {@link PostResponse}; this one owns the
  * upload/delete/view mutations and their access checks.
@@ -37,6 +37,8 @@ public class PostAttachmentService {
             "docx", AttachmentType.DOCX,
             "txt", AttachmentType.TXT,
             "md", AttachmentType.MD,
+            "sh", AttachmentType.SH,
+            "sql", AttachmentType.SQL,
             "zip", AttachmentType.ZIP
     );
 
@@ -50,6 +52,8 @@ public class PostAttachmentService {
             AttachmentType.DOCX, "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             AttachmentType.TXT, "text/plain",
             AttachmentType.MD, "text/markdown",
+            AttachmentType.SH, "text/plain",
+            AttachmentType.SQL, "text/plain",
             AttachmentType.ZIP, "application/zip"
     );
 
@@ -75,11 +79,19 @@ public class PostAttachmentService {
         AttachmentType type = ALLOWED_EXTENSIONS.get(extractExtension(file.getOriginalFilename()));
         if (type == null) {
             throw new IllegalArgumentException(
-                    "Invalid attachment type. Allowed types: PDF, DOC, DOCX, TXT, MD, ZIP");
+                    "Invalid attachment type. Allowed types: PDF, DOC, DOCX, TXT, MD, SH, SQL, ZIP");
         }
         if (file.getSize() > MAX_ATTACHMENT_SIZE) {
             throw new IllegalArgumentException("Attachment exceeds maximum allowed size of 20 MB");
         }
+
+        byte[] data;
+        try {
+            data = file.getBytes();
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Failed to read attachment file: " + e.getMessage());
+        }
+        validatePlainText(type, data);
 
         PostAttachment attachment = new PostAttachment();
         attachment.setPost(post);
@@ -87,11 +99,7 @@ public class PostAttachmentService {
         attachment.setAttachmentType(type);
         attachment.setOriginalFilename(sanitizeFilename(file.getOriginalFilename()));
         attachment.setFileSize(file.getSize());
-        try {
-            attachment.setData(file.getBytes());
-        } catch (IOException e) {
-            throw new IllegalArgumentException("Failed to read attachment file: " + e.getMessage());
-        }
+        attachment.setData(data);
         return PostAttachmentResponse.from(attachmentRepository.save(attachment));
     }
 
@@ -148,5 +156,19 @@ public class PostAttachmentService {
             sanitized = sanitized.substring(sanitized.length() - 255);
         }
         return sanitized;
+    }
+
+    /** SH/SQL are displayed as inert text and must not be binary files merely
+     * renamed to an allowed extension. */
+    private static void validatePlainText(AttachmentType type, byte[] data) {
+        if (type != AttachmentType.SH && type != AttachmentType.SQL) {
+            return;
+        }
+        int scanLength = Math.min(data.length, 8000);
+        for (int i = 0; i < scanLength; i++) {
+            if (data[i] == 0) {
+                throw new IllegalArgumentException("File does not look like a valid text file");
+            }
+        }
     }
 }

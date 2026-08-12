@@ -24,7 +24,7 @@ Read alongside:
 
 | Question | Decision |
 |---|---|
-| File formats | **PDF + TXT only.** No DOC/DOCX/EPUB. |
+| File formats | **PDF, TXT, MD, SH, SQL, DOCX.** MD/SH/SQL use the safe plain-text reader; DOCX is rendered client-side with Mammoth. Text formats are content-sniffed and DOCX must have an OOXML ZIP signature. |
 | File storage | Postgres `bytea`, but in a **separate `book_files` table**, not a column on `books`. |
 | Access control code | **New `BookAccessService`, mirroring `PostAccessService`** — not a generic parameterized service. |
 | Access groups | **Reuse the existing `AccessGroup` entity** (cross-feature). New `book_access_groups` + `book_user_permissions` join tables. |
@@ -48,7 +48,7 @@ slug                      String, NOT NULL, UNIQUE          -- /library/{slug}
 author                    String, NULL                      -- the book's author, not the uploader
 description               String, NULL, length 4000          -- Markdown, rendered like About/Post content
 category                  String, NULL                      -- loose string, same convention as Post.category
-fileType                  enum BookFileType {PDF, TXT}, NOT NULL
+fileType                  enum BookFileType {PDF, TXT, MD, SH, SQL, DOCX}, NOT NULL
 contentType               String(100), NOT NULL              -- real MIME
 originalFilename          String(255), NOT NULL
 fileSize                  Long, NOT NULL
