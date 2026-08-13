@@ -9,6 +9,12 @@ import { useSeo } from './useSeo';
 import { categoryColorClass } from './categoryColor';
 import { getLanguagePreference, languageQueryParam, setLanguagePreference, type LanguagePreference } from './contentLanguage';
 import { getShowTagCloud, setShowTagCloud } from './tagCloudPrefs';
+import {
+  getHomePostListSize,
+  HOME_POST_LIST_SIZES,
+  setHomePostListSize,
+  type HomePostListSize,
+} from './homePostListPrefs';
 
 const HOME_DESCRIPTION =
   'Practical PostgreSQL, Oracle, Kubernetes, and AI engineering notes: performance tuning, ' +
@@ -53,10 +59,16 @@ export default function App() {
   // preference (tagCloudPrefs.ts, same pattern as theme.ts).
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showTagCloud, setShowTagCloudState] = useState(() => getShowTagCloud());
+  const [postListSize, setPostListSizeState] = useState<HomePostListSize>(() => getHomePostListSize());
 
   function handleToggleTagCloud(show: boolean) {
     setShowTagCloudState(show);
     setShowTagCloud(show);
+  }
+
+  function handlePostListSizeChange(size: HomePostListSize) {
+    setPostListSizeState(size);
+    setHomePostListSize(size);
   }
 
   const categories = useMemo(() => {
@@ -314,6 +326,50 @@ export default function App() {
               <Link to="/member/exams" className="btn btn--ghost btn--sm">View all exams →</Link>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Compact article index ───────────────── */}
+      {!loading && !error && displayedPosts.length > 0 && (
+        <div className="container home-post-list-container">
+          <section className="home-post-list" aria-labelledby="home-post-list-title">
+            <div className="home-post-list__header">
+              <div>
+                <h2 id="home-post-list-title" className="home-post-list__title">Article list</h2>
+                <p className="home-post-list__summary">
+                  Showing {Math.min(postListSize, displayedPosts.length)} of {displayedPosts.length}
+                </p>
+              </div>
+              <label className="home-post-list__size-label">
+                Rows
+                <select
+                  className="home-post-list__size-select"
+                  value={postListSize}
+                  onChange={(event) => handlePostListSizeChange(Number(event.target.value) as HomePostListSize)}
+                >
+                  {HOME_POST_LIST_SIZES.map((size) => (
+                    <option key={size} value={size}>{size}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <ol className="home-post-list__items">
+              {displayedPosts.slice(0, postListSize).map((post) => (
+                <li key={post.id} className="home-post-list__item">
+                  <Link to={`/posts/${post.slug}`} className="home-post-list__link">
+                    <span className="home-post-list__post-title">{post.title}</span>
+                    {post.visibility === 'PRIVATE' && (
+                      <span className="home-post-list__lock" title="Private post" aria-label="Private post">🔒</span>
+                    )}
+                  </Link>
+                  <span className="home-post-list__meta">
+                    {post.category && <span>{post.category}</span>}
+                    <time dateTime={post.publishedAt ?? undefined}>{formatDate(post.publishedAt)}</time>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </section>
         </div>
       )}
 
